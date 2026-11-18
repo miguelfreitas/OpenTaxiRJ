@@ -41,6 +41,7 @@ type PlacePickerProps = {
   showGps?: boolean;
   useGpsOnMount?: boolean;
   onBack?: () => void;
+  onAccountPress?: () => void;
   onSubmit: (place: Place) => void;
 };
 
@@ -54,6 +55,7 @@ export function PlacePicker({
   showGps = false,
   useGpsOnMount = showGps,
   onBack,
+  onAccountPress,
   onSubmit,
 }: PlacePickerProps) {
   const cameraRef = useRef<CameraRef>(null);
@@ -259,7 +261,19 @@ export function PlacePicker({
               <Text style={styles.backText}>‹ Voltar</Text>
             </Pressable>
           ) : null}
-          <Text style={styles.headerTitle}>{title}</Text>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitle}>{title}</Text>
+            {onAccountPress ? (
+              <Pressable
+                accessibilityLabel="Minha Conta"
+                accessibilityRole="button"
+                onPress={onAccountPress}
+                style={styles.accountButton}
+              >
+                <Text style={styles.accountText}>Conta</Text>
+              </Pressable>
+            ) : null}
+          </View>
           <Text style={styles.headerSubtitle}>
             {showGps
               ? 'Sugerimos sua localização. Ajuste pelo mapa ou busque um endereço.'
@@ -420,7 +434,20 @@ const styles = StyleSheet.create({
   },
   backButton: { alignSelf: 'flex-start', marginBottom: 4 },
   backText: { color: colors.accent, fontSize: 14, fontWeight: '700' },
-  headerTitle: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  headerTitleRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  headerTitle: { color: colors.text, flex: 1, fontSize: 18, fontWeight: '700' },
+  accountButton: {
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  accountText: { color: colors.text, fontSize: 12, fontWeight: '800' },
   headerSubtitle: {
     color: colors.muted,
     fontSize: 13,

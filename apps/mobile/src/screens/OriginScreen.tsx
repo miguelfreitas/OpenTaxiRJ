@@ -12,6 +12,7 @@ export function OriginScreen({ navigation }: Props) {
     <PlacePicker
       eyebrow="ORIGEM"
       initialPlace={origin}
+      onAccountPress={() => navigation.navigate('Account')}
       onSubmit={(place) => {
         setOrigin(place);
         navigation.navigate('Destination');

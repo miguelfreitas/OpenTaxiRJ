@@ -57,6 +57,10 @@ export async function loadAddressHistory(): Promise<Place[]> {
   }
 }
 
+export function clearAddressHistory() {
+  return AsyncStorage.removeItem(HISTORY_KEY);
+}
+
 export async function addAddressHistory(place: Place): Promise<Place[]> {
   const current = await loadAddressHistory();
   const normalized = place.label.trim();

@@ -10,7 +10,7 @@ import {
   set,
   type Database,
 } from 'firebase/database';
-import { API_BASE_URL, AUTH_TOKEN } from '../api/client';
+import { API_BASE_URL, getApiToken } from '../api/client';
 import type { RideDriver } from '../state/RideContext';
 
 export type ChatMessage = {
@@ -102,6 +102,9 @@ export async function sendChatMessage(
 ) {
   const trimmed = text.trim();
   if (!trimmed) return;
+  const token = getApiToken();
+  if (!token) return;
+
   const messagesRef = ref(db(), chatPath(raceId, 'Driver'));
   const messageRef = push(messagesRef);
   const messageCode = messageRef.key ?? `${Date.now()}`;
@@ -116,7 +119,7 @@ export async function sendChatMessage(
     await fetch(`${API_BASE_URL}/races/sendMessageToDriver`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${AUTH_TOKEN}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

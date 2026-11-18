@@ -56,6 +56,7 @@ pnpm typecheck
 
 ## Runtime configuration
 
-The current build points at the local fake API. The API base URL and token are in
-`src/api/client.ts`; the Firebase Realtime Database emulator configuration is in
+The current build points at the local fake API. The API base URL is in
+`src/api/client.ts`; sign-in stores the bearer token under `authToken` with
+AsyncStorage. The Firebase Realtime Database emulator configuration is in
 `src/services/chat.ts`. Update both before targeting another environment.

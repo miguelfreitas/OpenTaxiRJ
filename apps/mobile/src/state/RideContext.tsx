@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { AUTH_TOKEN, WS_URL } from '../api/client';
+import { getApiToken, WS_URL } from '../api/client';
 import type { Coordinate, RouteInfo } from '../types/booking';
 import { decodePolyline } from '../utils/polyline';
 
@@ -93,11 +93,17 @@ export function RideProvider({ children }: { children: ReactNode }) {
       setLiveRoute(null);
       setConnection('connecting');
 
+      const token = getApiToken();
+      if (!token) {
+        setConnection('closed');
+        return;
+      }
+
       const WebSocketCtor = WebSocket as unknown as WsConstructor;
       let socket: WsSocket;
       try {
         socket = new WebSocketCtor(WS_URL, [], {
-          headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+          headers: { Authorization: `Bearer ${token}` },
         });
       } catch {
         setConnection('closed');

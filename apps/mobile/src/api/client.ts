@@ -5,7 +5,6 @@ import { decodePolyline } from '../utils/polyline';
 export const API_BASE_URL =
   Platform.OS === 'android' ? 'http://10.0.2.2:8081' : 'http://127.0.0.1:8081';
 export const WS_URL = API_BASE_URL.replace(/^http/, 'ws');
-export const AUTH_TOKEN = 'fake-token';
 
 const DISCOUNT_IDS: Record<string, string> = {
   'Tarifa Normal': '59c424f09c4b6aa933bbed93',
@@ -13,6 +12,30 @@ const DISCOUNT_IDS: Record<string, string> = {
   '20%': '59c424f09c4b6aa933bbed95',
   '30%': '59c424f09c4b6aa933bbed96',
   '40%': '59c424f09c4b6aa933bbed97',
+};
+
+export type PassengerUser = {
+  userId?: string;
+  fullName: string;
+  displayName: string;
+  email: string;
+  phoneNumber: string;
+  cpf?: string;
+};
+
+export type PassengerProfile = {
+  user?: Partial<PassengerUser>;
+};
+
+type AuthPassengerResponse = {
+  token?: string;
+};
+
+type SignInInput = {
+  login: string;
+  phoneNumber: string;
+  smsCode: string;
+  cityId?: string;
 };
 
 type FareResponse = {
@@ -44,6 +67,21 @@ export class ApiError extends Error {
   }
 }
 
+let apiToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+export function setApiToken(token: string | null) {
+  apiToken = token;
+}
+
+export function getApiToken() {
+  return apiToken;
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
 async function request<T>(path: string, options: RequestInit = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -51,8 +89,8 @@ async function request<T>(path: string, options: RequestInit = {}) {
     ...options,
     signal: controller.signal,
     headers: {
-      Authorization: `Bearer ${AUTH_TOKEN}`,
       'Content-Type': 'application/json',
+      ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
       ...(options.headers ?? {}),
     },
   });
@@ -60,9 +98,65 @@ async function request<T>(path: string, options: RequestInit = {}) {
   const text = await response.text();
   const body = text ? JSON.parse(text) : null;
   if (!response.ok) {
+    if (response.status === 401) unauthorizedHandler?.();
     throw new ApiError(body?.message ?? 'Falha na API fake', response.status);
   }
   return body as T;
+}
+
+export async function authPassenger(login: string, phoneNumber: string) {
+  return request<AuthPassengerResponse>('/auth/authPassenger', {
+    method: 'POST',
+    body: JSON.stringify({ login, phoneNumber }),
+  });
+}
+
+export async function signIn(input: SignInInput) {
+  const data = await request<{ token?: string }>('/auth/signIn', {
+    method: 'POST',
+    body: JSON.stringify({
+      login: input.login,
+      phoneNumber: input.phoneNumber,
+      smsCode: input.smsCode,
+      cityId: input.cityId ?? '1',
+      appVersion: '1.0.0',
+      phoneModel: '',
+      phoneManufacturer: '',
+      osVersion: String(Platform.Version),
+      osName: Platform.OS,
+    }),
+  });
+  if (!data.token) throw new ApiError('Token não recebido', 500);
+  return data.token;
+}
+
+export async function sendNewSmsCode(phoneNumber: string) {
+  return request<Record<string, never>>('/auth/sendNewSmsCode', {
+    method: 'POST',
+    body: JSON.stringify({ phoneNumber }),
+  });
+}
+
+export async function getPassengerProfile() {
+  const data = await request<PassengerProfile & { payload?: PassengerProfile }>(
+    '/aboutme/aboutMePassenger',
+  );
+  return (data.payload ?? data) as PassengerProfile;
+}
+
+export async function updatePassengerProfile(input: {
+  fullName: string;
+  displayName: string;
+  email: string;
+  phoneNumber: string;
+}) {
+  return request<{ isSendedSmsCode?: boolean }>(
+    '/account/updatePassengerAndUserData',
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 function point(coordinate: Coordinate) {
