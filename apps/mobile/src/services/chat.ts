@@ -1,4 +1,3 @@
-import { Platform } from 'react-native';
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import {
   connectDatabaseEmulator,
@@ -11,6 +10,7 @@ import {
   type Database,
 } from 'firebase/database';
 import { getApiToken, sendDriverMessage } from '../api/client';
+import { RTDB_URL, USE_FIREBASE_EMULATOR } from '../config';
 import type { RideDriver } from '../state/RideContext';
 
 export type ChatMessage = {
@@ -20,17 +20,20 @@ export type ChatMessage = {
   mine: boolean;
 };
 
-const DB_HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1';
-const DB_URL = `http://${DB_HOST}:9000?ns=taxi-rio`;
 const CHAT_NAMESPACE = 'release';
 
 let database: Database | null = null;
 
 function db() {
   if (!database) {
-    const app = getApps().length ? getApp() : initializeApp({ databaseURL: DB_URL });
+    const app = getApps().length
+      ? getApp()
+      : initializeApp({ databaseURL: RTDB_URL });
     database = getDatabase(app);
-    connectDatabaseEmulator(database, DB_HOST, 9000);
+    if (USE_FIREBASE_EMULATOR) {
+      const host = RTDB_URL.includes('10.0.2.2') ? '10.0.2.2' : '127.0.0.1';
+      connectDatabaseEmulator(database, host, 9000);
+    }
   }
   return database;
 }

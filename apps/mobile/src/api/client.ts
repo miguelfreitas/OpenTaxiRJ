@@ -1,11 +1,9 @@
-import { Platform } from 'react-native';
 import type { Coordinate, FareOption, Place, RouteInfo } from '../types/booking';
+import { API_BASE_URL, WS_URL } from '../config';
 import { decodePolyline } from '../utils/polyline';
 import { getClientVersion, getPassengerInfo, getSignInClientInfo } from '../services/clientInfo';
 
-export const API_BASE_URL =
-  Platform.OS === 'android' ? 'http://10.0.2.2:8081' : 'http://127.0.0.1:8081';
-export const WS_URL = API_BASE_URL.replace(/^http/, 'ws');
+export { API_BASE_URL, WS_URL };
 
 const DISCOUNT_IDS: Record<string, string> = {
   'Tarifa Normal': '59c424f09c4b6aa933bbed93',

@@ -35,7 +35,19 @@ pnpm android
 
 ## Build a release APK
 
+The default build uses the local fake API and local Firebase emulator.
+
 ```sh
+pnpm android:release
+```
+
+To build against the production API:
+
+```sh
+EXPO_PUBLIC_API_BASE_URL=https://api-passenger.app.taxi.rio \
+EXPO_PUBLIC_WS_URL=wss://wss-passenger.app.taxi.rio \
+EXPO_PUBLIC_RTDB_URL=https://taxi-rio.firebaseio.com \
+EXPO_PUBLIC_FIREBASE_EMULATOR=0 \
 pnpm android:release
 ```
 
@@ -43,6 +55,13 @@ The APK is written to:
 
 ```text
 apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+When switching between local and production API values, force a fresh JS bundle:
+
+```sh
+rm -rf android/app/build/generated/assets/react/release \
+  android/app/build/intermediates/sourcemaps/react/release
 ```
 
 The default release configuration uses the generated debug signing key. Replace it with a
@@ -63,7 +82,7 @@ request payloads.
 
 ## Runtime configuration
 
-The current build points at the local fake API. The API base URL is in
-`src/api/client.ts`; sign-in stores the bearer token under `authToken` with
-AsyncStorage. The Firebase Realtime Database emulator configuration is in
-`src/services/chat.ts`. Update both before targeting another environment.
+The build reads `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_URL`,
+`EXPO_PUBLIC_RTDB_URL`, and `EXPO_PUBLIC_FIREBASE_EMULATOR` from `src/config.ts`.
+Without them it uses the local fake API and local RTDB emulator. Sign-in stores the
+bearer token under `authToken` with AsyncStorage.

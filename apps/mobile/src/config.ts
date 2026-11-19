@@ -1,0 +1,17 @@
+import { Platform } from 'react-native';
+
+const localApiBase =
+  Platform.OS === 'android' ? 'http://10.0.2.2:8081' : 'http://127.0.0.1:8081';
+const localRtdbBase =
+  Platform.OS === 'android'
+    ? 'http://10.0.2.2:9000?ns=taxi-rio'
+    : 'http://127.0.0.1:9000?ns=taxi-rio';
+
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? localApiBase;
+export const WS_URL =
+  process.env.EXPO_PUBLIC_WS_URL ?? API_BASE_URL.replace(/^http/, 'ws');
+export const RTDB_URL = process.env.EXPO_PUBLIC_RTDB_URL ?? localRtdbBase;
+const localRtdb =
+  RTDB_URL.startsWith('http://10.0.2.2') || RTDB_URL.startsWith('http://127.0.0.1');
+export const USE_FIREBASE_EMULATOR =
+  (process.env.EXPO_PUBLIC_FIREBASE_EMULATOR ?? (localRtdb ? '1' : '0')) === '1';
