@@ -9,11 +9,13 @@ import {
 } from 'react';
 import {
   ApiError,
+  checkMinimumAppVersion,
   getPassengerProfile,
   setApiToken,
   setUnauthorizedHandler,
   signIn as signInRequest,
   updatePassengerProfile,
+  type PassengerProfile,
   type PassengerUser,
 } from '../api/client';
 import {
@@ -41,6 +43,7 @@ type ProfileUpdate = {
 type AuthContextValue = {
   status: AuthStatus;
   user: PassengerUser | null;
+  profile: PassengerProfile | null;
   completeLogin: (input: CompleteLoginInput) => Promise<void>;
   refreshProfile: () => Promise<PassengerUser | null>;
   updateProfile: (input: ProfileUpdate) => Promise<void>;
@@ -52,22 +55,29 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<PassengerUser | null>(null);
+  const [profile, setProfile] = useState<PassengerProfile | null>(null);
 
   const signOut = useCallback(async () => {
     await clearStoredToken();
     await clearAddressHistory();
     setApiToken(null);
     setUser(null);
+    setProfile(null);
     setStatus('anonymous');
   }, []);
 
   const refreshProfile = useCallback(async () => {
-    const profile = await getPassengerProfile();
-    const nextUser = (profile.user ?? null) as PassengerUser | null;
+    const nextProfile = await getPassengerProfile();
+    const nextUser = (nextProfile.user ?? null) as PassengerUser | null;
+    setProfile(nextProfile);
     if (nextUser) {
       setUser((current) => (current ? { ...current, ...nextUser } : nextUser));
     }
     return nextUser;
+  }, []);
+
+  useEffect(() => {
+    void checkMinimumAppVersion().catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -84,14 +94,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setApiToken(token);
       setStatus('authenticated');
       try {
-        const profile = await getPassengerProfile();
-        if (active) setUser((profile.user ?? null) as PassengerUser | null);
+        const nextProfile = await getPassengerProfile();
+        if (active) {
+          setProfile(nextProfile);
+          setUser((nextProfile.user ?? null) as PassengerUser | null);
+        }
       } catch (error) {
         if (error instanceof ApiError && error.status === 401) {
           await clearStoredToken();
           if (active) {
             setApiToken(null);
             setUser(null);
+            setProfile(null);
             setStatus('anonymous');
           }
         }
@@ -117,8 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setApiToken(token);
     setStatus('authenticated');
     try {
-      const profile = await getPassengerProfile();
-      setUser((profile.user ?? null) as PassengerUser | null);
+      const nextProfile = await getPassengerProfile();
+      setProfile(nextProfile);
+      setUser((nextProfile.user ?? null) as PassengerUser | null);
     } catch {
       // The session is valid even if the optional profile refresh fails.
     }
@@ -127,18 +142,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(async (input: ProfileUpdate) => {
     await updatePassengerProfile(input);
     setUser((current) => ({ ...current, ...input }));
+    setProfile((current) =>
+      current ? { ...current, user: { ...current.user, ...input } } : current,
+    );
   }, []);
 
   const value = useMemo(
     () => ({
       status,
       user,
+      profile,
       completeLogin,
       refreshProfile,
       updateProfile,
       signOut,
     }),
-    [status, user, completeLogin, refreshProfile, updateProfile, signOut],
+    [status, user, profile, completeLogin, refreshProfile, updateProfile, signOut],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

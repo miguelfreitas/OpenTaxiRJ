@@ -1,6 +1,6 @@
 {
   "name": "open-taxi-rj",
-  "version": "1.0.0",
+  "version": "4.1.20",
   "main": "index.ts",
   "dependencies": {
     "@maplibre/maplibre-react-native": "^11.5.1",
@@ -8,6 +8,7 @@
     "@react-navigation/native": "^7.5.2",
     "@react-navigation/native-stack": "^7.21.1",
     "expo": "~58.0.26",
+    "expo-application": "~58.1.2",
     "expo-build-properties": "~58.0.12",
     "expo-location": "^58.0.22",
     "expo-status-bar": "~58.0.5",

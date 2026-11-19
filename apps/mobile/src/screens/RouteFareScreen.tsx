@@ -15,6 +15,7 @@ import { createRide, getFareOptions, getRouteDetails } from '../api/client';
 import { getDrivingRoute } from '../services/routing';
 import { OriginPin } from '../components/OriginPin';
 import { OSM_STYLE_URL } from '../mapStyle';
+import { useAuth } from '../state/AuthContext';
 import { useBooking } from '../state/BookingContext';
 import { colors } from '../theme';
 import type { FareOption, RouteInfo } from '../types/booking';
@@ -29,8 +30,17 @@ const moneyPayment = {
   description: 'Pague diretamente ao motorista',
 };
 
+const fallbackPayment = {
+  pindex: 0,
+  paymentId: 'money',
+  name: 'Dinheiro',
+};
+
 export function RouteFareScreen({ navigation }: Props) {
   const { origin, destination, setRoute, setFare } = useBooking();
+  const { profile } = useAuth();
+  const payment = profile?.associatedPaymentMethod ?? fallbackPayment;
+  const cityId = profile?.city?.cityId ?? '1';
   const cameraRef = useRef<CameraRef>(null);
   const insets = useSafeAreaInsets();
   const [route, setLocalRoute] = useState<RouteInfo | null>(null);
@@ -56,7 +66,7 @@ export function RouteFareScreen({ navigation }: Props) {
         if (!active) return;
         setLocalRoute(nextRoute);
         setRoute(nextRoute);
-        const options = await getFareOptions(origin, destination, nextRoute);
+        const options = await getFareOptions(origin, destination, payment, cityId);
         if (!active) return;
         setFares(options);
         setLocalFare(options[0]);
@@ -72,7 +82,7 @@ export function RouteFareScreen({ navigation }: Props) {
     return () => {
       active = false;
     };
-  }, [origin, destination, setFare, setRoute]);
+  }, [cityId, origin, destination, payment, setFare, setRoute]);
 
   useEffect(() => {
     if (!route?.coordinates.length) return;
@@ -114,7 +124,7 @@ export function RouteFareScreen({ navigation }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const race = await createRide(origin, destination, route, fare);
+      const race = await createRide(origin, destination, route, fare, payment, cityId);
       navigation.navigate('Ride', { raceId: race.raceId ?? 'fake-race-1' });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível solicitar a corrida.');

@@ -54,6 +54,13 @@ private release keystore before distributing the APK.
 pnpm typecheck
 ```
 
+## Protocol identity
+
+The app reports its real version (`4.1.20`) and sends the same client metadata on each
+REST request: Android ID as `deviceId`, OS name/version, and device model/manufacturer.
+The shared protocol IDs for city, payment, and fare discounts are carried in the normal
+request payloads.
+
 ## Runtime configuration
 
 The current build points at the local fake API. The API base URL is in

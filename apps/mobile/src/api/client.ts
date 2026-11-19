@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import type { Coordinate, FareOption, Place, RouteInfo } from '../types/booking';
 import { decodePolyline } from '../utils/polyline';
+import { getClientVersion, getPassengerInfo, getSignInClientInfo } from '../services/clientInfo';
 
 export const API_BASE_URL =
   Platform.OS === 'android' ? 'http://10.0.2.2:8081' : 'http://127.0.0.1:8081';
@@ -23,8 +24,16 @@ export type PassengerUser = {
   cpf?: string;
 };
 
+export type AssociatedPaymentMethod = {
+  pindex: number;
+  paymentId?: string | null;
+  name?: string;
+};
+
 export type PassengerProfile = {
   user?: Partial<PassengerUser>;
+  city?: { cityId?: string; name?: string };
+  associatedPaymentMethod?: AssociatedPaymentMethod;
 };
 
 type AuthPassengerResponse = {
@@ -36,6 +45,11 @@ type SignInInput = {
   phoneNumber: string;
   smsCode: string;
   cityId?: string;
+};
+
+type MinimumVersionResponse = {
+  needsUpdate?: boolean;
+  message?: string;
 };
 
 type FareResponse = {
@@ -85,12 +99,15 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
 async function request<T>(path: string, options: RequestInit = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
+  const hasBody = options.body !== undefined && options.body !== null;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     signal: controller.signal,
     headers: {
-      'Content-Type': 'application/json',
       ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+      PassengerInfo: JSON.stringify(getPassengerInfo()),
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+      Accept: 'application/json, text/plain, */*',
       ...(options.headers ?? {}),
     },
   });
@@ -102,6 +119,12 @@ async function request<T>(path: string, options: RequestInit = {}) {
     throw new ApiError(body?.message ?? 'Falha na API fake', response.status);
   }
   return body as T;
+}
+
+export async function checkMinimumAppVersion() {
+  return request<MinimumVersionResponse>(
+    `/auth/checkMinimumAppVersion?currentVersion=${encodeURIComponent(getClientVersion())}`,
+  );
 }
 
 export async function authPassenger(login: string, phoneNumber: string) {
@@ -118,12 +141,8 @@ export async function signIn(input: SignInInput) {
       login: input.login,
       phoneNumber: input.phoneNumber,
       smsCode: input.smsCode,
-      cityId: input.cityId ?? '1',
-      appVersion: '1.0.0',
-      phoneModel: '',
-      phoneManufacturer: '',
-      osVersion: String(Platform.Version),
-      osName: Platform.OS,
+      cityId: input.cityId ?? '',
+      ...getSignInClientInfo(),
     }),
   });
   if (!data.token) throw new ApiError('Token não recebido', 500);
@@ -159,12 +178,24 @@ export async function updatePassengerProfile(input: {
   );
 }
 
-function point(coordinate: Coordinate) {
+function position(coordinate: Coordinate) {
   return {
     lat: coordinate.latitude,
     lng: coordinate.longitude,
-    latitude: coordinate.latitude,
-    longitude: coordinate.longitude,
+  };
+}
+
+function paymentPayload(payment: AssociatedPaymentMethod) {
+  return {
+    pindex: payment.pindex,
+    paymentId: payment.paymentId ?? null,
+  };
+}
+
+function placePoint(place: Place) {
+  return {
+    formattedAddress: place.label,
+    position: position(place.coordinate),
   };
 }
 
@@ -193,21 +224,16 @@ export async function getRouteDetails(origin: Place, destination: Place) {
 export async function getFareOptions(
   origin: Place,
   destination: Place,
-  route: RouteInfo,
+  payment: AssociatedPaymentMethod,
+  cityId = '1',
 ) {
   const data = await request<FareResponse[]>('/races/fares', {
     method: 'POST',
     body: JSON.stringify({
-      paymentId: 'money',
-      associatedPaymentMethod: { pindex: 0, paymentId: 'money' },
-      cityId: '1',
-      route: {
-        distance: route.distanceMeters,
-        duration: route.durationSeconds,
-        polyline: route.polyline,
-        origin: point(origin.coordinate),
-        destination: point(destination.coordinate),
-      },
+      associatedPaymentMethod: paymentPayload(payment),
+      cityId,
+      destination: placePoint(destination),
+      origin: placePoint(origin),
     }),
   });
   const fares = data
@@ -234,17 +260,19 @@ export async function createRide(
   destination: Place,
   route: RouteInfo,
   fare: FareOption,
+  payment: AssociatedPaymentMethod,
+  cityId = '1',
 ) {
   return request<RaceResponse>('/races/create', {
     method: 'POST',
     body: JSON.stringify({
-      associatedPaymentMethod: { pindex: 0, paymentId: 'money' },
+      associatedPaymentMethod: paymentPayload(payment),
       raceDiscount: { id: fare.id, fare: fare.label },
       corporateRaceJustification: null,
-      city: { cityId: '1', cityName: 'Rio de Janeiro' },
+      city: { cityId, cityName: 'Rio de Janeiro' },
       geoLocationData: {
-        origin: point(origin.coordinate),
-        destination: point(destination.coordinate),
+        origin: placePoint(origin),
+        destination: placePoint(destination),
       },
       routeOriginDestination: {
         distance: {
@@ -252,12 +280,10 @@ export async function createRide(
           value: Math.round(route.distanceMeters),
         },
         duration: {
-          text: `${Math.max(1, Math.round(route.durationSeconds / 60))} min`,
+          text: `${Math.max(1, Math.round(route.durationSeconds / 60))} minutos`,
           value: Math.round(route.durationSeconds),
         },
         polyline: route.polyline,
-        origin: point(origin.coordinate),
-        destination: point(destination.coordinate),
       },
     }),
   });
@@ -266,7 +292,13 @@ export async function createRide(
 export async function cancelRide() {
   return request<Record<string, never>>('/races/cancel', {
     method: 'POST',
-    body: JSON.stringify({}),
+  });
+}
+
+export async function sendDriverMessage(raceId: string, message: string) {
+  return request<Record<string, never>>('/races/sendMessageToDriver', {
+    method: 'POST',
+    body: JSON.stringify({ raceId, message }),
   });
 }
 
@@ -281,6 +313,5 @@ export async function rateRide(rating: number, comment: string) {
 export async function skipRideRating() {
   return request<Record<string, never>>('/races/notRating', {
     method: 'POST',
-    body: JSON.stringify({}),
   });
 }
