@@ -70,6 +70,7 @@ export function PlacePicker({
   const [resolving, setResolving] = useState(false);
   const [locating, setLocating] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
 
   const inputFocusedRef = useRef(false);
@@ -86,12 +87,18 @@ export function PlacePicker({
       if (!inputFocusedRef.current || force) {
         setAddress(place.label);
         setQuery(place.label);
+        setGeocodeError(
+          place.id.startsWith('pin-') ? 'Nenhum endereço encontrado para este ponto.' : null,
+        );
       }
-    } catch {
+    } catch (cause) {
       if (!inputFocusedRef.current || force) {
         const label = formatCoordinate(next);
         setAddress(label);
         setQuery(label);
+        setGeocodeError(
+          cause instanceof Error ? `Endereço indisponível: ${cause.message}` : 'Endereço indisponível.',
+        );
       }
     } finally {
       setResolving(false);
@@ -195,6 +202,7 @@ export function PlacePicker({
     setQuery(place.label);
     setResults([]);
     setNotice(null);
+    setGeocodeError(null);
     setInputFocused(false);
     inputFocusedRef.current = false;
     Keyboard.dismiss();
@@ -378,6 +386,7 @@ export function PlacePicker({
         <Text style={styles.hint}>
           O pino no centro do mapa é a posição enviada ao servidor.
         </Text>
+        {geocodeError ? <Text style={styles.notice}>{geocodeError}</Text> : null}
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
         <View style={styles.actions}>
           {showGps ? (

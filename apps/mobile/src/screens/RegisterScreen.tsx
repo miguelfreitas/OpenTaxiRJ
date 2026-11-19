@@ -13,11 +13,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { ApiError } from '../api/client';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
+import { formatApiError } from '../utils/diagnostics';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
+
+const SENT_FIELDS =
+  'envio: login, phoneNumber, smsCode, fullName, displayName, appVersion, phoneModel, ' +
+  'phoneManufacturer, osVersion, osName';
 
 export function RegisterScreen({ navigation, route }: Props) {
   const { login, phoneNumber, smsCode } = route.params;
@@ -28,6 +34,7 @@ export function RegisterScreen({ navigation, route }: Props) {
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
 
   const submit = async () => {
     const trimmedName = fullName.trim();
@@ -47,6 +54,7 @@ export function RegisterScreen({ navigation, route }: Props) {
 
     setSubmitting(true);
     setError(null);
+    setDetail(null);
     try {
       await completeSignUp({
         login,
@@ -55,8 +63,18 @@ export function RegisterScreen({ navigation, route }: Props) {
         fullName: trimmedName,
         displayName: trimmedDisplayName,
       });
-    } catch {
-      setError('Não foi possível concluir o cadastro.');
+    } catch (cause) {
+      if (cause instanceof ApiError) {
+        setError(`Cadastro recusado (HTTP ${cause.status}): ${cause.message}`);
+        setDetail(formatApiError(cause, SENT_FIELDS));
+      } else {
+        setDetail(null);
+        setError(
+          cause instanceof Error
+            ? `Não foi possível concluir o cadastro: ${cause.message}`
+            : 'Não foi possível concluir o cadastro.',
+        );
+      }
     } finally {
       setSubmitting(false);
     }
@@ -124,6 +142,7 @@ export function RegisterScreen({ navigation, route }: Props) {
         </Pressable>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+        {detail ? <Text style={styles.diagnostic}>{detail}</Text> : null}
 
         <Pressable
           accessibilityRole="button"
@@ -179,6 +198,13 @@ const styles = StyleSheet.create({
   checkboxText: { color: colors.text, fontSize: 15, fontWeight: '900' },
   termsText: { color: colors.text, flex: 1, fontSize: 13, marginLeft: 10 },
   error: { color: colors.danger, fontSize: 12, marginTop: 14 },
+  diagnostic: {
+    color: colors.muted,
+    fontFamily: 'monospace',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 6,
+  },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.pin,

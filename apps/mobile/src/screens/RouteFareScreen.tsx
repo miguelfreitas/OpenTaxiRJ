@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,7 +11,13 @@ import {
 import { Camera, GeoJSONSource, Layer, Map, Marker, type CameraRef } from '@maplibre/maplibre-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { createRide, getFareOptions, getRouteDetails } from '../api/client';
+import {
+  API_BASE_URL,
+  createRide,
+  getFareOptions,
+  getMyOriginCity,
+  getRouteDetails,
+} from '../api/client';
 import { getDrivingRoute } from '../services/routing';
 import { OriginPin } from '../components/OriginPin';
 import { OSM_STYLE_URL } from '../mapStyle';
@@ -20,6 +26,7 @@ import { useBooking } from '../state/BookingContext';
 import { colors } from '../theme';
 import type { FareOption, RouteInfo } from '../types/booking';
 import type { RootStackParamList } from '../navigation/types';
+import { formatApiError } from '../utils/diagnostics';
 import { formatBRL, formatDistance, formatDuration, toLngLat } from '../utils/geo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RouteFare'>;
@@ -39,8 +46,19 @@ const fallbackPayment = {
 export function RouteFareScreen({ navigation }: Props) {
   const { origin, destination, setRoute, setFare } = useBooking();
   const { profile } = useAuth();
-  const payment = profile?.associatedPaymentMethod ?? fallbackPayment;
+  const associatedPayment = profile?.associatedPaymentMethod ?? fallbackPayment;
+  const eligiblePaymentId = profile?.listEligiblePaymentMethodsNative?.find(
+    (item) => Number(item.pindex) === Number(associatedPayment.pindex),
+  )?.paymentMethodId;
+  const payment = useMemo(
+    () =>
+      eligiblePaymentId && !associatedPayment.paymentId
+        ? { ...associatedPayment, paymentId: eligiblePaymentId }
+        : associatedPayment,
+    [associatedPayment, eligiblePaymentId],
+  );
   const cityId = profile?.city?.cityId ?? '1';
+  const [activeCityId, setActiveCityId] = useState(String(cityId));
   const cameraRef = useRef<CameraRef>(null);
   const insets = useSafeAreaInsets();
   const [route, setLocalRoute] = useState<RouteInfo | null>(null);
@@ -49,6 +67,7 @@ export function RouteFareScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
     if (!origin || !destination) return;
@@ -56,17 +75,27 @@ export function RouteFareScreen({ navigation }: Props) {
     const load = async () => {
       setLoading(true);
       setError(null);
+      setDetail(null);
       try {
         let nextRoute;
         try {
           nextRoute = await getRouteDetails(origin, destination);
-        } catch {
-          nextRoute = await getDrivingRoute(origin.coordinate, destination.coordinate);
+        } catch (routeCause) {
+          try {
+            nextRoute = await getDrivingRoute(origin.coordinate, destination.coordinate);
+          } catch (fallbackCause) {
+            throw new Error(
+              `Rota: ${formatApiError(routeCause, 'servidor')} / fallback: ${formatApiError(fallbackCause)}`,
+            );
+          }
         }
         if (!active) return;
         setLocalRoute(nextRoute);
         setRoute(nextRoute);
-        const options = await getFareOptions(origin, destination, payment, cityId);
+        const originCity = await getMyOriginCity(origin.coordinate).catch(() => null);
+        const resolvedCityId = String(originCity?.cityId ?? cityId);
+        setActiveCityId(resolvedCityId);
+        const options = await getFareOptions(origin, destination, payment, resolvedCityId);
         if (!active) return;
         setFares(options);
         setLocalFare(options[0]);
@@ -74,6 +103,11 @@ export function RouteFareScreen({ navigation }: Props) {
       } catch (cause) {
         if (!active) return;
         setError(cause instanceof Error ? cause.message : 'Não foi possível calcular a corrida.');
+        setDetail(
+          `${formatApiError(cause, `tarifas (pindex ${payment?.pindex ?? 'auto'} ${typeof payment?.pindex}, paymentId ${payment?.paymentId ?? 'null'}, city ${activeCityId})`)}
+` +
+            `Servidor: ${API_BASE_URL}`,
+        );
       } finally {
         if (active) setLoading(false);
       }
@@ -124,10 +158,12 @@ export function RouteFareScreen({ navigation }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const race = await createRide(origin, destination, route, fare, payment, cityId);
+      const race = await createRide(origin, destination, route, fare, payment, activeCityId);
       navigation.navigate('Ride', { raceId: race.raceId ?? 'fake-race-1' });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Não foi possível solicitar a corrida.');
+      setDetail(`${formatApiError(cause, 'solicitação')}
+Servidor: ${API_BASE_URL}`);
     } finally {
       setSubmitting(false);
     }
@@ -195,9 +231,7 @@ export function RouteFareScreen({ navigation }: Props) {
           <View>
             <Text style={styles.errorTitle}>Não foi possível continuar</Text>
             <Text style={styles.errorText}>{error}</Text>
-            <Text style={styles.errorHint}>
-              Verifique se o servidor fake está rodando em 10.0.2.2:8081.
-            </Text>
+            {detail ? <Text style={styles.errorDetail}>{detail}</Text> : null}
             <Pressable onPress={() => navigation.goBack()} style={styles.retryButton}>
               <Text style={styles.retryText}>Voltar</Text>
             </Pressable>
@@ -334,7 +368,13 @@ const styles = StyleSheet.create({
   loadingText: { color: colors.muted, marginTop: 12 },
   errorTitle: { color: colors.text, fontSize: 17, fontWeight: '700', marginTop: 4 },
   errorText: { color: colors.muted, fontSize: 13, lineHeight: 18, marginTop: 6 },
-  errorHint: { color: colors.muted, fontSize: 12, lineHeight: 17, marginTop: 8 },
+  errorDetail: {
+    color: colors.muted,
+    fontFamily: 'monospace',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 8,
+  },
   retryButton: { alignItems: 'center', borderColor: colors.border, borderRadius: 12, borderWidth: 1, marginTop: 16, paddingVertical: 12 },
   retryText: { color: colors.text, fontWeight: '700' },
   pressed: { opacity: 0.72 },

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ApiError, sendNewSmsCode, verifySmsCode } from '../api/client';
+import { ApiError, sendNewSmsCode, sendNewWhatsAppCode, verifySmsCode } from '../api/client';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
@@ -22,7 +22,7 @@ import { digitsOnly, maskPhone } from '../utils/phone';
 type Props = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 export function VerificationScreen({ navigation, route }: Props) {
-  const { login, phoneNumber, cod } = route.params;
+  const { login, phoneNumber, cod, useWhatsApp = false } = route.params;
   const insets = useSafeAreaInsets();
   const { completeLogin } = useAuth();
   const [code, setCode] = useState('');
@@ -41,7 +41,7 @@ export function VerificationScreen({ navigation, route }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      if (cod === 200) {
+      if (cod === 201) {
         const result = await verifySmsCode(login, phoneNumber, smsCode);
         if (result.status !== 200) {
           setError('Verifique se o código está correto.');
@@ -68,7 +68,8 @@ export function VerificationScreen({ navigation, route }: Props) {
     setError(null);
     setNotice(null);
     try {
-      await sendNewSmsCode(phoneNumber);
+      if (useWhatsApp) await sendNewWhatsAppCode(phoneNumber);
+      else await sendNewSmsCode(phoneNumber);
       setNotice('Código enviado novamente.');
     } catch {
       setError('Não foi possível reenviar o código.');
@@ -98,10 +99,13 @@ export function VerificationScreen({ navigation, route }: Props) {
           <Text style={styles.backText}>‹ Alterar telefone</Text>
         </Pressable>
 
-        <Text style={styles.title}>Verificação de SMS</Text>
+        <Text style={styles.title}>
+          {useWhatsApp ? 'Verificação via WhatsApp' : 'Verificação de SMS'}
+        </Text>
         <Text style={styles.description}>
-          Foi enviado um SMS para o número de celular informado. Por favor, digite-o
-          abaixo.
+          {useWhatsApp
+            ? 'Foi enviada uma mensagem via WhatsApp para o número informado. Digite o código abaixo.'
+            : 'Foi enviado um SMS para o número informado. Digite o código abaixo.'}
         </Text>
 
         <View style={styles.phoneRow}>
@@ -110,7 +114,7 @@ export function VerificationScreen({ navigation, route }: Props) {
         </View>
 
         <TextInput
-          accessibilityLabel="Código SMS"
+          accessibilityLabel={useWhatsApp ? 'Código WhatsApp' : 'Código SMS'}
           autoComplete="sms-otp"
           autoFocus
           keyboardType="number-pad"

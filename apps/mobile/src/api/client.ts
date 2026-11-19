@@ -28,10 +28,20 @@ export type AssociatedPaymentMethod = {
   name?: string;
 };
 
+export type EligiblePaymentMethod = {
+  pindex: number;
+  name?: string;
+  type?: string;
+  shortName?: string;
+  active?: boolean;
+  paymentMethodId?: string;
+};
+
 export type PassengerProfile = {
   user?: Partial<PassengerUser>;
   city?: { cityId?: string; name?: string };
   associatedPaymentMethod?: AssociatedPaymentMethod;
+  listEligiblePaymentMethodsNative?: EligiblePaymentMethod[];
 };
 
 export type AuthResult<T> = {
@@ -78,10 +88,19 @@ type RouteDetailsResponse = {
 
 export class ApiError extends Error {
   status: number;
+  body: unknown;
+  raw: string | null;
 
-  constructor(message: string, status: number) {
+  constructor(
+    message: string,
+    status: number,
+    body: unknown = null,
+    raw: string | null = null,
+  ) {
     super(message);
     this.status = status;
+    this.body = body;
+    this.raw = raw;
   }
 }
 
@@ -120,10 +139,21 @@ async function requestWithStatus<T>(
   });
   clearTimeout(timeout);
   const text = await response.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      body = text;
+    }
+  }
   if (!response.ok) {
     if (response.status === 401) unauthorizedHandler?.();
-    throw new ApiError(body?.message ?? 'Falha na API fake', response.status);
+    const message =
+      body && typeof body === 'object' && 'message' in body
+        ? String((body as { message?: unknown }).message)
+        : text.trim().slice(0, 300) || `Erro HTTP ${response.status}`;
+    throw new ApiError(message, response.status, body, text);
   }
   return { status: response.status, body: body as T };
 }
@@ -139,10 +169,14 @@ export async function checkMinimumAppVersion() {
   );
 }
 
-export async function authPassenger(login: string, phoneNumber: string) {
+export async function authPassenger(
+  login: string,
+  phoneNumber: string,
+  useWhatsApp = false,
+) {
   return requestWithStatus<AuthPassengerResponse>('/auth/authPassenger', {
     method: 'POST',
-    body: JSON.stringify({ login, phoneNumber }),
+    body: JSON.stringify({ login, phoneNumber, useWhatsApp }),
   });
 }
 
@@ -163,6 +197,13 @@ export async function signIn(input: SignInInput) {
 
 export async function sendNewSmsCode(phoneNumber: string) {
   return request<Record<string, never>>('/auth/sendNewSmsCode', {
+    method: 'POST',
+    body: JSON.stringify({ phoneNumber }),
+  });
+}
+
+export async function sendNewWhatsAppCode(phoneNumber: string) {
+  return request<Record<string, never>>('/auth/sendNewWhatsAppCode', {
     method: 'POST',
     body: JSON.stringify({ phoneNumber }),
   });
@@ -194,7 +235,9 @@ export async function signUp(input: {
       ...getSignInClientInfo(),
     }),
   });
-  if (!data.body.token) throw new ApiError('Token não recebido', 500);
+  if (!data.body.token) {
+    throw new ApiError('Resposta de cadastro sem token.', data.status, data.body);
+  }
   return { status: data.status, token: data.body.token };
 }
 
@@ -216,6 +259,19 @@ export async function validateRecoveryCode(input: {
     {
       method: 'POST',
       body: JSON.stringify(input),
+    },
+  );
+}
+
+export async function getMyOriginCity(coordinate: Coordinate) {
+  return request<{ cityId?: string | number; name?: string; isAbleToUsePaymentInApp?: boolean }>(
+    '/aboutme/getMyOriginCity',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        lat: coordinate.latitude,
+        lng: coordinate.longitude,
+      }),
     },
   );
 }
@@ -249,9 +305,18 @@ function position(coordinate: Coordinate) {
   };
 }
 
-function paymentPayload(payment: AssociatedPaymentMethod) {
+function farePaymentPayload(payment: AssociatedPaymentMethod) {
+  const pindex = Number(payment?.pindex);
+  if (!Number.isFinite(pindex) || pindex <= 0) return { pindex: 10 };
+  if (pindex === 4) return { pindex, paymentId: '6' };
+  return { pindex, paymentId: payment.paymentId ?? null };
+}
+
+function createPaymentPayload(payment: AssociatedPaymentMethod) {
+  const pindex = Number(payment?.pindex);
+  if (!Number.isFinite(pindex) || pindex <= 0) return { pindex: 1 };
   return {
-    pindex: payment.pindex,
+    pindex,
     paymentId: payment.paymentId ?? null,
   };
 }
@@ -294,7 +359,7 @@ export async function getFareOptions(
   const data = await request<FareResponse[]>('/races/fares', {
     method: 'POST',
     body: JSON.stringify({
-      associatedPaymentMethod: paymentPayload(payment),
+      associatedPaymentMethod: farePaymentPayload(payment),
       cityId,
       destination: placePoint(destination),
       origin: placePoint(origin),
@@ -315,7 +380,7 @@ export async function getFareOptions(
       } satisfies FareOption;
     })
     .filter((item): item is FareOption => Boolean(item));
-  if (!fares.length) throw new Error('Nenhuma tarifa disponível');
+  if (!fares.length) throw new Error('Nenhum taxista disponível para esta forma de pagamento.');
   return fares;
 }
 
@@ -330,7 +395,7 @@ export async function createRide(
   return request<RaceResponse>('/races/create', {
     method: 'POST',
     body: JSON.stringify({
-      associatedPaymentMethod: paymentPayload(payment),
+      associatedPaymentMethod: createPaymentPayload(payment),
       raceDiscount: { id: fare.id, fare: fare.label },
       corporateRaceJustification: null,
       city: { cityId, cityName: 'Rio de Janeiro' },

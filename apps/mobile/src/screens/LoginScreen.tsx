@@ -25,6 +25,7 @@ export function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [useWhatsApp, setUseWhatsApp] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const login = email.trim();
@@ -41,11 +42,11 @@ export function LoginScreen({ navigation }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await authPassenger(login, phoneNumber);
+      const result = await authPassenger(login, phoneNumber, useWhatsApp);
       if (result.status === 201) {
-        navigation.navigate('Verification', { login, phoneNumber, cod: 201 });
+        navigation.navigate('Verification', { login, phoneNumber, cod: 201, useWhatsApp });
       } else if (result.status === 200) {
-        navigation.navigate('Verification', { login, phoneNumber, cod: 200 });
+        navigation.navigate('Verification', { login, phoneNumber, cod: 200, useWhatsApp });
       } else if (result.status === 202) {
         navigation.navigate('EmailRecovery', {
           login,
@@ -120,6 +121,36 @@ export function LoginScreen({ navigation }: Props) {
             value={phone}
           />
 
+          <Text style={styles.label}>Receber código</Text>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: useWhatsApp }}
+            onPress={() => setUseWhatsApp(true)}
+            style={styles.methodRow}
+          >
+            <View style={[styles.radio, useWhatsApp && styles.radioOn]}>
+              {useWhatsApp ? <View style={styles.radioDot} /> : null}
+            </View>
+            <View style={styles.methodText}>
+              <Text style={styles.methodTitle}>WhatsApp</Text>
+              <Text style={styles.methodSub}>Código pelo WhatsApp</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: !useWhatsApp }}
+            onPress={() => setUseWhatsApp(false)}
+            style={styles.methodRow}
+          >
+            <View style={[styles.radio, !useWhatsApp && styles.radioOn]}>
+              {!useWhatsApp ? <View style={styles.radioDot} /> : null}
+            </View>
+            <View style={styles.methodText}>
+              <Text style={styles.methodTitle}>SMS</Text>
+              <Text style={styles.methodSub}>Código por mensagem de texto</Text>
+            </View>
+          </Pressable>
+
           {error ? <Text style={styles.error}>{error}</Text> : null}
 
           <Pressable
@@ -187,6 +218,21 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   error: { color: colors.danger, fontSize: 12, lineHeight: 18, marginTop: 12 },
+  methodRow: { alignItems: 'center', flexDirection: 'row', marginTop: 12 },
+  methodText: { flex: 1, marginLeft: 12 },
+  methodTitle: { color: colors.text, fontSize: 14, fontWeight: '800' },
+  methodSub: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  radio: {
+    alignItems: 'center',
+    borderColor: colors.border,
+    borderRadius: 11,
+    borderWidth: 2,
+    height: 22,
+    justifyContent: 'center',
+    width: 22,
+  },
+  radioOn: { borderColor: colors.pin },
+  radioDot: { backgroundColor: colors.pin, borderRadius: 5, height: 10, width: 10 },
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.pin,
