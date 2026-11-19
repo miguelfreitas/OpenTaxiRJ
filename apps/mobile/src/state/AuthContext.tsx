@@ -14,6 +14,7 @@ import {
   setApiToken,
   setUnauthorizedHandler,
   signIn as signInRequest,
+  signUp as signUpRequest,
   updatePassengerProfile,
   type PassengerProfile,
   type PassengerUser,
@@ -33,6 +34,11 @@ type CompleteLoginInput = {
   smsCode: string;
 };
 
+type CompleteSignUpInput = CompleteLoginInput & {
+  fullName: string;
+  displayName: string;
+};
+
 type ProfileUpdate = {
   fullName: string;
   displayName: string;
@@ -45,6 +51,7 @@ type AuthContextValue = {
   user: PassengerUser | null;
   profile: PassengerProfile | null;
   completeLogin: (input: CompleteLoginInput) => Promise<void>;
+  completeSignUp: (input: CompleteSignUpInput) => Promise<void>;
   refreshProfile: () => Promise<PassengerUser | null>;
   updateProfile: (input: ProfileUpdate) => Promise<void>;
   signOut: () => Promise<void>;
@@ -125,8 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => setUnauthorizedHandler(null);
   }, [signOut]);
 
-  const completeLogin = useCallback(async (input: CompleteLoginInput) => {
-    const token = await signInRequest(input);
+  const completeSession = useCallback(async (token: string) => {
     await saveStoredToken(token);
     setApiToken(token);
     setStatus('authenticated');
@@ -138,6 +144,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The session is valid even if the optional profile refresh fails.
     }
   }, []);
+
+  const completeLogin = useCallback(
+    async (input: CompleteLoginInput) => {
+      const token = await signInRequest(input);
+      await completeSession(token);
+    },
+    [completeSession],
+  );
+
+  const completeSignUp = useCallback(
+    async (input: CompleteSignUpInput) => {
+      const result = await signUpRequest(input);
+      await completeSession(result.token);
+    },
+    [completeSession],
+  );
 
   const updateProfile = useCallback(async (input: ProfileUpdate) => {
     await updatePassengerProfile(input);
@@ -153,11 +175,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       completeLogin,
+      completeSignUp,
       refreshProfile,
       updateProfile,
       signOut,
     }),
-    [status, user, profile, completeLogin, refreshProfile, updateProfile, signOut],
+    [
+      status,
+      user,
+      profile,
+      completeLogin,
+      completeSignUp,
+      refreshProfile,
+      updateProfile,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

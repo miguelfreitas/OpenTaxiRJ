@@ -27,24 +27,34 @@ export function LoginScreen({ navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const login = email.trim();
   const phoneNumber = digitsOnly(phone);
   const canSubmit =
-    email.trim().includes('@') && phoneNumber.length >= 10 && !submitting;
+    email.trim().includes('@') && phoneNumber.length === 11 && !submitting;
 
   const submit = async () => {
     if (!canSubmit) {
-      setError('Informe um e-mail válido e um telefone com DDD.');
+      setError('Informe um e-mail válido e um telefone com 11 dígitos.');
       return;
     }
 
     setSubmitting(true);
     setError(null);
     try {
-      await authPassenger(email.trim().toLowerCase(), phoneNumber);
-      navigation.navigate('Verification', {
-        login: email.trim().toLowerCase(),
-        phoneNumber,
-      });
+      const result = await authPassenger(login, phoneNumber);
+      if (result.status === 201) {
+        navigation.navigate('Verification', { login, phoneNumber, cod: 201 });
+      } else if (result.status === 200) {
+        navigation.navigate('Verification', { login, phoneNumber, cod: 200 });
+      } else if (result.status === 202) {
+        navigation.navigate('EmailRecovery', {
+          login,
+          phoneNumber,
+          oldPhoneNumber: result.body.oldPhoneNumber,
+        });
+      } else {
+        setError('Resposta de autenticação não reconhecida.');
+      }
     } catch (err) {
       setError(
         err instanceof ApiError

@@ -5,9 +5,11 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AccountScreen } from './src/screens/AccountScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { DestinationScreen } from './src/screens/DestinationScreen';
+import { EmailRecoveryScreen } from './src/screens/EmailRecoveryScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { OriginScreen } from './src/screens/OriginScreen';
 import { RateRideScreen } from './src/screens/RateRideScreen';
+import { RegisterScreen } from './src/screens/RegisterScreen';
 import { RideScreen } from './src/screens/RideScreen';
 import { RouteFareScreen } from './src/screens/RouteFareScreen';
 import { VerificationScreen } from './src/screens/VerificationScreen';
@@ -70,6 +72,8 @@ function RootNavigator() {
         <>
           <Stack.Screen component={LoginScreen} name="Login" />
           <Stack.Screen component={VerificationScreen} name="Verification" />
+          <Stack.Screen component={RegisterScreen} name="Register" />
+          <Stack.Screen component={EmailRecoveryScreen} name="EmailRecovery" />
         </>
       )}
     </Stack.Navigator>

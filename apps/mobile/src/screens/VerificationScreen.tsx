@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ApiError, sendNewSmsCode } from '../api/client';
+import { ApiError, sendNewSmsCode, verifySmsCode } from '../api/client';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
@@ -22,7 +22,7 @@ import { digitsOnly, maskPhone } from '../utils/phone';
 type Props = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 export function VerificationScreen({ navigation, route }: Props) {
-  const { login, phoneNumber } = route.params;
+  const { login, phoneNumber, cod } = route.params;
   const insets = useSafeAreaInsets();
   const { completeLogin } = useAuth();
   const [code, setCode] = useState('');
@@ -41,7 +41,16 @@ export function VerificationScreen({ navigation, route }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      await completeLogin({ login, phoneNumber, smsCode });
+      if (cod === 200) {
+        const result = await verifySmsCode(login, phoneNumber, smsCode);
+        if (result.status !== 200) {
+          setError('Verifique se o código está correto.');
+          return;
+        }
+        navigation.navigate('Register', { login, phoneNumber, smsCode });
+      } else {
+        await completeLogin({ login, phoneNumber, smsCode });
+      }
     } catch (err) {
       setError(
         err instanceof ApiError

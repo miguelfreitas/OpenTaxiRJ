@@ -34,8 +34,14 @@ export type PassengerProfile = {
   associatedPaymentMethod?: AssociatedPaymentMethod;
 };
 
+export type AuthResult<T> = {
+  status: number;
+  body: T;
+};
+
 type AuthPassengerResponse = {
   token?: string;
+  oldPhoneNumber?: string;
 };
 
 type SignInInput = {
@@ -94,7 +100,10 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
   unauthorizedHandler = handler;
 }
 
-async function request<T>(path: string, options: RequestInit = {}) {
+async function requestWithStatus<T>(
+  path: string,
+  options: RequestInit = {},
+): Promise<AuthResult<T>> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   const hasBody = options.body !== undefined && options.body !== null;
@@ -116,7 +125,12 @@ async function request<T>(path: string, options: RequestInit = {}) {
     if (response.status === 401) unauthorizedHandler?.();
     throw new ApiError(body?.message ?? 'Falha na API fake', response.status);
   }
-  return body as T;
+  return { status: response.status, body: body as T };
+}
+
+async function request<T>(path: string, options: RequestInit = {}) {
+  const result = await requestWithStatus<T>(path, options);
+  return result.body;
 }
 
 export async function checkMinimumAppVersion() {
@@ -126,7 +140,7 @@ export async function checkMinimumAppVersion() {
 }
 
 export async function authPassenger(login: string, phoneNumber: string) {
-  return request<AuthPassengerResponse>('/auth/authPassenger', {
+  return requestWithStatus<AuthPassengerResponse>('/auth/authPassenger', {
     method: 'POST',
     body: JSON.stringify({ login, phoneNumber }),
   });
@@ -152,6 +166,58 @@ export async function sendNewSmsCode(phoneNumber: string) {
     method: 'POST',
     body: JSON.stringify({ phoneNumber }),
   });
+}
+
+export async function verifySmsCode(
+  login: string,
+  phoneNumber: string,
+  smsCode: string,
+) {
+  return requestWithStatus<Record<string, never>>('/auth/verifySmsCode', {
+    method: 'POST',
+    body: JSON.stringify({ login, phoneNumber, smsCode }),
+  });
+}
+
+export async function signUp(input: {
+  login: string;
+  phoneNumber: string;
+  smsCode: string;
+  emailCode?: string;
+  fullName: string;
+  displayName: string;
+}) {
+  const data = await requestWithStatus<{ token?: string }>('/auth/signUp', {
+    method: 'POST',
+    body: JSON.stringify({
+      ...input,
+      ...getSignInClientInfo(),
+    }),
+  });
+  if (!data.body.token) throw new ApiError('Token não recebido', 500);
+  return { status: data.status, token: data.body.token };
+}
+
+export async function sendRecoveryCode(login: string) {
+  return request<Record<string, never>>('/accountrecovery/sendvalidationcode', {
+    method: 'POST',
+    body: JSON.stringify({ login }),
+  });
+}
+
+export async function validateRecoveryCode(input: {
+  login: string;
+  validationCode: string;
+  phoneNumber: string;
+  oldPhoneNumber?: string;
+}) {
+  return requestWithStatus<Record<string, never>>(
+    '/accountrecovery/verifyvalidationcode',
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export async function getPassengerProfile() {
