@@ -37,8 +37,40 @@ export type EligiblePaymentMethod = {
   paymentMethodId?: string;
 };
 
+export type RacePoint = {
+  formattedAddress?: string;
+  position?: { lat?: number; lng?: number };
+  latitude?: number;
+  longitude?: number;
+};
+
+export type PassengerCurrentRace = {
+  raceId?: string;
+  statusId?: number;
+  typeOfCall?: string;
+  origin?: RacePoint;
+  destination?: RacePoint;
+  routeOriginDestination?: {
+    polyline?: string;
+    distance?: { value?: number };
+    duration?: { value?: number };
+    origin?: RacePoint;
+    destination?: RacePoint;
+  };
+  routeDriverPassenger?: {
+    polyline?: string;
+    distance?: { value?: number };
+    duration?: { value?: number };
+  };
+  raceDiscount?: { id?: string; fare?: string; flag?: string };
+  estimatedPrice?: string | number;
+  driver?: { name?: string; carModel?: string; carPlate?: string };
+};
+
 export type PassengerProfile = {
   user?: Partial<PassengerUser>;
+  statusId?: number;
+  currentRace?: PassengerCurrentRace | null;
   city?: { cityId?: string; name?: string };
   associatedPaymentMethod?: AssociatedPaymentMethod;
   listEligiblePaymentMethodsNative?: EligiblePaymentMethod[];

@@ -53,6 +53,7 @@ type AuthContextValue = {
   completeLogin: (input: CompleteLoginInput) => Promise<void>;
   completeSignUp: (input: CompleteSignUpInput) => Promise<void>;
   refreshProfile: () => Promise<PassengerUser | null>;
+  clearActiveRide: () => void;
   updateProfile: (input: ProfileUpdate) => Promise<void>;
   signOut: () => Promise<void>;
 };
@@ -81,6 +82,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser((current) => (current ? { ...current, ...nextUser } : nextUser));
     }
     return nextUser;
+  }, []);
+
+  const clearActiveRide = useCallback(() => {
+    setProfile((current) => (current ? { ...current, currentRace: null } : current));
   }, []);
 
   useEffect(() => {
@@ -177,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completeLogin,
       completeSignUp,
       refreshProfile,
+      clearActiveRide,
       updateProfile,
       signOut,
     }),
@@ -187,6 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       completeLogin,
       completeSignUp,
       refreshProfile,
+      clearActiveRide,
       updateProfile,
       signOut,
     ],

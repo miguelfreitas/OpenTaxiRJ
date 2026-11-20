@@ -6,7 +6,7 @@ export type RootStackParamList = {
   Origin: undefined;
   Destination: undefined;
   RouteFare: undefined;
-  Ride: { raceId: string };
+  Ride: { raceId: string; initialStatusId?: number };
   Chat: { raceId: string };
   RateRide: { raceId: string };
   Account: undefined;

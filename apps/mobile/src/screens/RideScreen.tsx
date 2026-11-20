@@ -23,6 +23,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { cancelRide } from '../api/client';
 import { DriverMarker, OriginPin } from '../components/OriginPin';
 import { OSM_STYLE_URL } from '../mapStyle';
+import { useAuth } from '../state/AuthContext';
 import { useBooking } from '../state/BookingContext';
 import { useRide } from '../state/RideContext';
 import { colors } from '../theme';
@@ -33,6 +34,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Ride'>;
 
 export function RideScreen({ navigation, route: navRoute }: Props) {
   const { origin, destination, route, fare, reset } = useBooking();
+  const { clearActiveRide } = useAuth();
   const { stage, statusId, connection, driver, driverPosition, liveRoute, start, stop } = useRide();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraRef>(null);
@@ -40,13 +42,13 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const { raceId } = navRoute.params;
+  const { raceId, initialStatusId } = navRoute.params;
   const activeRoute = liveRoute ?? route;
 
   useEffect(() => {
-    start(raceId);
+    start(raceId, initialStatusId);
     return () => stop();
-  }, [raceId, start, stop]);
+  }, [initialStatusId, raceId, start, stop]);
 
   useEffect(() => {
     const hardwareBack = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -86,19 +88,22 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
   useEffect(() => {
     if (stage !== 'finished') return;
     allowLeaveRef.current = true;
+    clearActiveRide();
     navigation.replace('RateRide', { raceId });
-  }, [navigation, raceId, stage]);
+  }, [clearActiveRide, navigation, raceId, stage]);
 
   useEffect(() => {
     if (statusId !== 103) return;
     allowLeaveRef.current = true;
+    clearActiveRide();
     stop();
     reset();
     navigation.popToTop();
-  }, [navigation, reset, statusId, stop]);
+  }, [clearActiveRide, navigation, reset, statusId, stop]);
 
   const goHomeAfterRide = () => {
     allowLeaveRef.current = true;
+    clearActiveRide();
     stop();
     reset();
     navigation.popToTop();

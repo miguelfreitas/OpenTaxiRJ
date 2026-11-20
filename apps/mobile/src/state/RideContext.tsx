@@ -30,7 +30,7 @@ type RideContextValue = {
   driver: RideDriver | null;
   driverPosition: Coordinate | null;
   liveRoute: RouteInfo | null;
-  start: (raceId: string) => void;
+  start: (raceId: string, initialStatusId?: number) => void;
   stop: () => void;
 };
 
@@ -84,10 +84,11 @@ export function RideProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const start = useCallback(
-    (_raceId: string) => {
+    (_raceId: string, initialStatusId?: number) => {
       stop();
-      setStage('finding');
-      setStatusId(100);
+      const initialStage = initialStatusId ? stageFor(initialStatusId) : null;
+      setStage(initialStage ?? 'finding');
+      setStatusId(initialStatusId ?? 100);
       setDriver(null);
       setDriverPosition(null);
       setLiveRoute(null);
