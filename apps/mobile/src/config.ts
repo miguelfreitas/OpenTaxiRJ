@@ -8,8 +8,17 @@ const localRtdbBase =
     : 'http://127.0.0.1:9000?ns=taxi-rio';
 
 export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? localApiBase;
-export const WS_URL =
-  process.env.EXPO_PUBLIC_WS_URL ?? API_BASE_URL.replace(/^http/, 'ws');
+
+function websocketUrl(value: string) {
+  const trimmed = value.trim().replace(/^\/\//, '');
+  if (/^wss?:\/\//i.test(trimmed)) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed.replace(/^http/i, 'ws');
+  return `${API_BASE_URL.startsWith('https:') ? 'wss' : 'ws'}://${trimmed}`;
+}
+
+export const WS_URL = websocketUrl(
+  process.env.EXPO_PUBLIC_WS_URL ?? API_BASE_URL.replace(/^http/, 'ws'),
+);
 export const RTDB_URL = process.env.EXPO_PUBLIC_RTDB_URL ?? localRtdbBase;
 const localRtdb =
   RTDB_URL.startsWith('http://10.0.2.2') || RTDB_URL.startsWith('http://127.0.0.1');
