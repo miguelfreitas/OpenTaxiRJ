@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StatusBar,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import {
   API_BASE_URL,
+  cancelRide,
   createRide,
   getFareOptions,
   getMyOriginCity,
@@ -66,6 +68,7 @@ export function RouteFareScreen({ navigation }: Props) {
   const [fare, setLocalFare] = useState<FareOption | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<string | null>(null);
 
@@ -153,6 +156,34 @@ export function RouteFareScreen({ navigation }: Props) {
       }
     : null;
 
+  const cancelExisting = () => {
+    Alert.alert(
+      'Cancelar corrida',
+      'Existe uma corrida aguardando taxista. Deseja cancelá-la?',
+      [
+        { text: 'Não', style: 'cancel' },
+        {
+          text: 'Cancelar corrida',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              await cancelRide();
+              setError(null);
+              setDetail(null);
+              navigation.goBack();
+            } catch (cause) {
+              setError(cause instanceof Error ? cause.message : 'Não foi possível cancelar a corrida.');
+              setDetail(formatApiError(cause, 'cancelamento'));
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const submit = async () => {
     if (!route || !fare) return;
     setSubmitting(true);
@@ -232,6 +263,17 @@ Servidor: ${API_BASE_URL}`);
             <Text style={styles.errorTitle}>Não foi possível continuar</Text>
             <Text style={styles.errorText}>{error}</Text>
             {detail ? <Text style={styles.errorDetail}>{detail}</Text> : null}
+            {error.includes('Já existe uma corrida') ? (
+              <Pressable
+                disabled={cancelling}
+                onPress={cancelExisting}
+                style={[styles.retryButton, styles.cancelRideButton]}
+              >
+                <Text style={styles.cancelRideText}>
+                  {cancelling ? 'Cancelando…' : 'Cancelar corrida existente'}
+                </Text>
+              </Pressable>
+            ) : null}
             <Pressable onPress={() => navigation.goBack()} style={styles.retryButton}>
               <Text style={styles.retryText}>Voltar</Text>
             </Pressable>
@@ -377,6 +419,8 @@ const styles = StyleSheet.create({
   },
   retryButton: { alignItems: 'center', borderColor: colors.border, borderRadius: 12, borderWidth: 1, marginTop: 16, paddingVertical: 12 },
   retryText: { color: colors.text, fontWeight: '700' },
+  cancelRideButton: { borderColor: colors.danger, marginTop: 8 },
+  cancelRideText: { color: colors.danger, fontWeight: '700' },
   pressed: { opacity: 0.72 },
   eyebrow: { color: colors.muted, fontSize: 11, fontWeight: '700', letterSpacing: 1.4 },
   placeRow: { alignItems: 'center', flexDirection: 'row', marginTop: 12 },
