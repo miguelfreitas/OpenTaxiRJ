@@ -263,7 +263,7 @@ Servidor: ${API_BASE_URL}`);
             <Text style={styles.errorTitle}>Não foi possível continuar</Text>
             <Text style={styles.errorText}>{error}</Text>
             {detail ? <Text style={styles.errorDetail}>{detail}</Text> : null}
-            {error.includes('Já existe uma corrida') ? (
+            {error ? (
               <Pressable
                 disabled={cancelling}
                 onPress={cancelExisting}
