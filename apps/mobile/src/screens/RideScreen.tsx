@@ -89,6 +89,14 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
     navigation.replace('RateRide', { raceId });
   }, [navigation, raceId, stage]);
 
+  useEffect(() => {
+    if (statusId !== 103) return;
+    allowLeaveRef.current = true;
+    stop();
+    reset();
+    navigation.popToTop();
+  }, [navigation, reset, statusId, stop]);
+
   const goHomeAfterRide = () => {
     allowLeaveRef.current = true;
     stop();
@@ -102,8 +110,11 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
       await cancelRide();
       setConfirmVisible(false);
       goHomeAfterRide();
-    } catch {
-      Alert.alert('Não foi possível cancelar', 'Tente novamente.');
+    } catch (cause) {
+      Alert.alert(
+        'Não foi possível cancelar',
+        cause instanceof Error ? cause.message : 'Tente novamente.',
+      );
     } finally {
       setCancelling(false);
     }
