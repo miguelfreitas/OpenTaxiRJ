@@ -16,6 +16,7 @@ import {
   API_BASE_URL,
   cancelRide,
   createRide,
+  isNoCancelableRideError,
   getFareOptions,
   getMyOriginCity,
   getRouteDetails,
@@ -45,9 +46,11 @@ const fallbackPayment = {
   name: 'Dinheiro',
 };
 
+const activeStatuses = new Set([100, 110, 111, 112]);
+
 export function RouteFareScreen({ navigation }: Props) {
   const { origin, destination, setRoute, setFare } = useBooking();
-  const { profile } = useAuth();
+  const { profile, refreshProfile, clearActiveRide } = useAuth();
   const associatedPayment = profile?.associatedPaymentMethod ?? fallbackPayment;
   const eligiblePaymentId = profile?.listEligiblePaymentMethodsNative?.find(
     (item) => Number(item.pindex) === Number(associatedPayment.pindex),
@@ -171,8 +174,28 @@ export function RouteFareScreen({ navigation }: Props) {
               await cancelRide();
               setError(null);
               setDetail(null);
-              navigation.goBack();
+              clearActiveRide();
+              navigation.popToTop();
             } catch (cause) {
+              if (isNoCancelableRideError(cause)) {
+                setError(null);
+                setDetail(null);
+                clearActiveRide();
+                navigation.popToTop();
+                return;
+              }
+              try {
+                const nextProfile = await refreshProfile();
+                const race = nextProfile?.currentRace;
+                const status = Number(race?.statusId ?? nextProfile?.statusId);
+                if (!race || !activeStatuses.has(status)) {
+                  setError(null);
+                  setDetail(null);
+                  clearActiveRide();
+                  navigation.popToTop();
+                  return;
+                }
+              } catch {}
               setError(cause instanceof Error ? cause.message : 'Não foi possível cancelar a corrida.');
               setDetail(formatApiError(cause, 'cancelamento'));
             } finally {
@@ -190,8 +213,31 @@ export function RouteFareScreen({ navigation }: Props) {
     setError(null);
     try {
       const race = await createRide(origin, destination, route, fare, payment, activeCityId);
-      navigation.navigate('Ride', { raceId: race.raceId ?? 'fake-race-1' });
+      if (!race.raceId) {
+        const nextProfile = await refreshProfile();
+        const recovered = nextProfile?.currentRace;
+        if (!recovered?.raceId) throw new Error('Resposta inválida ao solicitar a corrida.');
+        const recoveredStatus = Number(recovered.statusId ?? nextProfile?.statusId ?? 100);
+        navigation.navigate('Ride', {
+          raceId: recovered.raceId,
+          initialStatusId: activeStatuses.has(recoveredStatus) ? recoveredStatus : 100,
+        });
+        return;
+      }
+      navigation.navigate('Ride', {
+        raceId: race.raceId,
+        initialStatusId: race.statusId,
+      });
     } catch (cause) {
+      try {
+        const nextProfile = await refreshProfile();
+        const recovered = nextProfile?.currentRace;
+        const status = Number(recovered?.statusId ?? nextProfile?.statusId);
+        if (recovered?.raceId && activeStatuses.has(status)) {
+          navigation.navigate('Ride', { raceId: recovered.raceId, initialStatusId: status });
+          return;
+        }
+      } catch {}
       setError(cause instanceof Error ? cause.message : 'Não foi possível solicitar a corrida.');
       setDetail(`${formatApiError(cause, 'solicitação')}
 Servidor: ${API_BASE_URL}`);

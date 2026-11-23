@@ -22,7 +22,7 @@ import {
 } from '@maplibre/maplibre-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { cancelRide } from '../api/client';
+import { cancelRide, isNoCancelableRideError } from '../api/client';
 import { DriverMarker, OriginPin } from '../components/OriginPin';
 import { OSM_STYLE_URL } from '../mapStyle';
 import { useAuth } from '../state/AuthContext';
@@ -38,7 +38,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Ride'>;
 
 export function RideScreen({ navigation, route: navRoute }: Props) {
   const { origin, destination, route, fare, reset } = useBooking();
-  const { clearActiveRide } = useAuth();
+  const { clearActiveRide, refreshProfile } = useAuth();
   const {
     stage,
     statusId,
@@ -130,6 +130,21 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
       setConfirmVisible(false);
       goHomeAfterRide();
     } catch (cause) {
+      if (isNoCancelableRideError(cause)) {
+        setConfirmVisible(false);
+        goHomeAfterRide();
+        return;
+      }
+      try {
+        const nextProfile = await refreshProfile();
+        const race = nextProfile?.currentRace;
+        const nextStatus = Number(race?.statusId ?? nextProfile?.statusId);
+        if (!race || nextStatus === 103 || nextStatus === 113 || nextStatus === 114) {
+          setConfirmVisible(false);
+          goHomeAfterRide();
+          return;
+        }
+      } catch {}
       Alert.alert(
         'Não foi possível cancelar',
         cause instanceof Error ? cause.message : 'Tente novamente.',

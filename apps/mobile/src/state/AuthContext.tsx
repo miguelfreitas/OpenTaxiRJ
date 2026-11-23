@@ -52,7 +52,7 @@ type AuthContextValue = {
   profile: PassengerProfile | null;
   completeLogin: (input: CompleteLoginInput) => Promise<void>;
   completeSignUp: (input: CompleteSignUpInput) => Promise<void>;
-  refreshProfile: () => Promise<PassengerUser | null>;
+  refreshProfile: () => Promise<PassengerProfile | null>;
   clearActiveRide: () => void;
   updateProfile: (input: ProfileUpdate) => Promise<void>;
   signOut: () => Promise<void>;
@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (nextUser) {
       setUser((current) => (current ? { ...current, ...nextUser } : nextUser));
     }
-    return nextUser;
+    return nextProfile;
   }, []);
 
   const clearActiveRide = useCallback(() => {

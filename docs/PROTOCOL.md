@@ -546,6 +546,9 @@ Cancellation:
 - `POST /races/cancel` with no body.
 - The server returns 200 and broadcasts status 103.
 - The original and clone return home and clear the active ride.
+- If the server rejects cancellation with “Nenhuma corrida que possa ser cancelada
+  foi encontrada para esse passageiro”, the local ride is already gone. The clone
+  clears it and returns home instead of trapping the user on a stale ride.
 
 Startup recovery:
 
@@ -553,6 +556,42 @@ Startup recovery:
 - The clone hydrates the booking and opens the ride screen at 100/110/111/112.
 - A recovered 103 returns home.
 - The original may also restore from `statusId` and route fields in `currentRace`.
+
+### 8.8 Reconnect and stale-ride reconciliation
+
+The WebSocket can drop after status 111 while the server later closes the ride. If
+the terminal 103 is missed, the client must not trust the last rendered state.
+
+The clone now:
+
+- Reconnects with exponential backoff while a ride is active.
+- Rejects messages whose `currentRace.raceId` does not match the active race.
+- Refreshes `aboutMePassenger` on every successful socket open, not only on later
+  reconnect attempts, and when the app returns to the foreground.
+- Runs a 30-second watchdog while finding, waiting, or in-race; if the socket stays
+  half-open and no terminal frame arrives, it refreshes the profile and applies the
+  server state.
+- If the profile has no `currentRace`, closes the local ride (status 103) and
+  returns home, including when the local stage was still FindingDriver.
+- Recovers driver/status/route from `currentRace` when the profile still has the
+  ride, including `100/110` messages whose `currentRace.statusId` is already
+  `111/112`.
+- Treats `103/113/114` from `currentRace` as terminal before the raw envelope
+  status, so a stale `100` cannot keep the UI on WaitingDriver.
+- Refreshes the profile after an ambiguous cancel failure; a missing or terminal
+  `currentRace` returns home instead of showing a retry loop.
+- Refreshes the profile after an ambiguous create failure or a create response
+  without `raceId`; an active `currentRace` is adopted and the fake `fake-race-1`
+  fallback is never used.
+- Uses the status-111 accepted position for the driver marker and the
+  `routeDriverPassenger` polyline; status 112 uses `routeOriginDestination`.
+- Preserves the latest live `102` position and `213` route when a profile refresh
+  returns the same status; otherwise a watchdog refresh could reset the car to the
+  accepted position and the line to the initial route.
+
+This was reproduced on the emulator: accept a fake ride, kill the WebSocket/server
+while clearing the fake server’s current race, then let the client reconnect. The
+fixed client returns to Origin instead of remaining on WaitingDriver.
 
 ## 9. Driver payload and privacy
 
@@ -679,10 +718,17 @@ Closed in the clone:
 - Fake driver fixture includes the original field names and phone.
 - Status 213 fake payload units are consistent with the original's metres/minutes
   contract.
+- Clone marker movement and `213` polyline shortening are verified on the emulator.
+- Original-vs-clone A/B completed with the installed original 4.1.20: visible taxi
+  marker, in-race route/ETA update, and rating reached; clone produced the same
+  state/visual behavior on its seeded route.
 
 Still divergent or unverified:
 
 - Original 4.1.22 reports `appVersion 4.1.22`; clone reports `4.1.20`.
+- Original `102` requests a fresh driver-to-destination route; clone currently
+  relies on `213` for the route update. Original visual A/B is complete; the route
+  recalculation path remains a parity difference, not an observed visual failure.
 - Original 4.1.22 exposes a separate email-code login path; clone exposes WhatsApp with
   SMS fallback.
 - Original rating submission was not captured; only `notRating` was.

@@ -151,6 +151,14 @@ export class ApiError extends Error {
   }
 }
 
+export function isNoCancelableRideError(error: unknown) {
+  return (
+    error instanceof ApiError &&
+    /nenhuma corrida.*cancel/i.test(error.message) &&
+    /passageiro|encontrada/i.test(error.message)
+  );
+}
+
 let apiToken: string | null = null;
 let unauthorizedHandler: (() => void) | null = null;
 
@@ -380,7 +388,7 @@ function position(coordinate: Coordinate) {
 
 function farePaymentPayload(payment: AssociatedPaymentMethod) {
   const pindex = Number(payment?.pindex);
-  if (!Number.isFinite(pindex) || pindex <= 0) return { pindex: 10 };
+  if (!Number.isFinite(pindex) || pindex <= 0) return { pindex: 1 };
   if (pindex === 4) return { pindex, paymentId: '6' };
   return { pindex, paymentId: payment.paymentId ?? null };
 }
