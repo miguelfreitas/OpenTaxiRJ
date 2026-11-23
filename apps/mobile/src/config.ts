@@ -20,6 +20,11 @@ export const WS_URL = websocketUrl(
   process.env.EXPO_PUBLIC_WS_URL ?? API_BASE_URL.replace(/^http/, 'ws'),
 );
 export const RTDB_URL = process.env.EXPO_PUBLIC_RTDB_URL ?? localRtdbBase;
+export const DRIVER_PHOTO_BASE_URL =
+  process.env.EXPO_PUBLIC_DRIVER_PHOTO_BASE_URL ??
+  (API_BASE_URL.startsWith('http://10.0.2.2') || API_BASE_URL.startsWith('http://127.0.0.1')
+    ? `${API_BASE_URL}/google/storage/url/drivers`
+    : 'https://files.apps.taxi.rio/google/storage/url/drivers');
 const localRtdb =
   RTDB_URL.startsWith('http://10.0.2.2') || RTDB_URL.startsWith('http://127.0.0.1');
 export const USE_FIREBASE_EMULATOR =

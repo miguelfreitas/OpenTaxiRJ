@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { subscribeToChat, sendChatMessage, type ChatMessage } from '../services/chat';
 import { useRide } from '../state/RideContext';
 import { colors } from '../theme';
+import { driverName, driverVehicle } from '../utils/driver';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
@@ -75,9 +76,8 @@ export function ChatScreen({ navigation, route }: Props) {
         <View style={styles.headerText}>
           <Text style={styles.title}>Chat</Text>
           <Text numberOfLines={1} style={styles.subtitle}>
-            {driver?.name ?? 'Motorista'}
-            {driver?.carModel ? ` · ${driver.carModel}` : ''}
-            {driver?.carPlate ? ` · ${driver.carPlate}` : ''}
+            {driverName(driver)}
+            {driverVehicle(driver) ? ` · ${driverVehicle(driver)}` : ''}
           </Text>
         </View>
         <View style={styles.onlineDot} />

@@ -8,20 +8,15 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { getApiToken, WS_URL } from '../api/client';
+import { getApiToken, getDriverPhotoUrl, WS_URL, type DriverPayload } from '../api/client';
+import { useAuth } from './AuthContext';
 import type { Coordinate, RouteInfo } from '../types/booking';
 import { decodePolyline } from '../utils/polyline';
 
 export type RideStage = 'idle' | 'finding' | 'waiting' | 'in_race' | 'finished';
 export type RideConnection = 'idle' | 'connecting' | 'open' | 'closed';
 
-export type RideDriver = {
-  name?: string;
-  carModel?: string;
-  carPlate?: string;
-  taxiDriverId?: string;
-  driverId?: string;
-};
+export type RideDriver = DriverPayload;
 
 type RideContextValue = {
   stage: RideStage;
@@ -29,6 +24,7 @@ type RideContextValue = {
   connection: RideConnection;
   driver: RideDriver | null;
   driverPosition: Coordinate | null;
+  driverPhotoUrl: string | null;
   liveRoute: RouteInfo | null;
   start: (raceId: string, initialStatusId?: number) => void;
   stop: () => void;
@@ -50,6 +46,41 @@ type WsConstructor = new (
   options?: { headers?: Record<string, string> },
 ) => WsSocket;
 
+type RoutePayload = {
+  polyline?: string;
+  distance?: { value?: number };
+  duration?: { value?: number };
+};
+
+type Point = { lat?: number; lng?: number; latitude?: number; longitude?: number };
+
+function coordinateFromPoint(point: Point | null | undefined): Coordinate | null {
+  if (!point) return null;
+  const latitude = Number(point.lat ?? point.latitude);
+  const longitude = Number(point.lng ?? point.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+}
+
+function routeFromPayload(
+  payload: RoutePayload | undefined,
+  durationMultiplier = 1,
+): RouteInfo | null {
+  if (!payload?.polyline) return null;
+  const coordinates = decodePolyline(payload.polyline);
+  if (coordinates.length < 2) return null;
+  const distanceMeters = Number(payload.distance?.value ?? 0);
+  const durationSeconds = Number(payload.duration?.value ?? 0) * durationMultiplier;
+  if (!Number.isFinite(distanceMeters) || !Number.isFinite(durationSeconds)) return null;
+  return {
+    distanceMeters,
+    durationSeconds,
+    coordinates,
+    polyline: payload.polyline,
+    source: 'server',
+  };
+}
+
 function stageFor(statusId: number): RideStage | null {
   if (statusId === 100 || statusId === 110) return 'finding';
   if (statusId === 111) return 'waiting';
@@ -66,7 +97,9 @@ export function RideProvider({ children }: { children: ReactNode }) {
   const [connection, setConnection] = useState<RideConnection>('idle');
   const [driver, setDriver] = useState<RideDriver | null>(null);
   const [driverPosition, setDriverPosition] = useState<Coordinate | null>(null);
+  const [driverPhotoUrl, setDriverPhotoUrl] = useState<string | null>(null);
   const [liveRoute, setLiveRoute] = useState<RouteInfo | null>(null);
+  const { profile } = useAuth();
 
   const stop = useCallback(() => {
     const socket = socketRef.current;
@@ -91,6 +124,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
       setStatusId(initialStatusId ?? 100);
       setDriver(null);
       setDriverPosition(null);
+      setDriverPhotoUrl(null);
       setLiveRoute(null);
       setConnection('connecting');
 
@@ -121,9 +155,15 @@ export function RideProvider({ children }: { children: ReactNode }) {
           const message = JSON.parse(String(event.data)) as {
             statusId?: number;
             payload?: {
-              driver?: RideDriver & { position?: { lat?: number; lng?: number } };
-              currentRace?: { driver?: RideDriver };
-              position?: { lat?: number; lng?: number };
+              driver?: RideDriver & { position?: Point; addressAcceptedRace?: Point };
+              currentRace?: {
+                driver?: RideDriver;
+                routeDriverPassenger?: RoutePayload;
+                routeOriginDestination?: RoutePayload;
+              };
+              routeDriverPassenger?: RoutePayload;
+              routeOriginDestination?: RoutePayload;
+              position?: Point;
               polyline?: string;
               distance?: number;
               duration?: number;
@@ -131,35 +171,40 @@ export function RideProvider({ children }: { children: ReactNode }) {
           };
           const nextStatus = Number(message.statusId);
           if (!Number.isFinite(nextStatus)) return;
+          const payload = message.payload;
           setStatusId(nextStatus);
           const nextStage = stageFor(nextStatus);
           if (nextStage) setStage(nextStage);
-          const nextDriver =
-            message.payload?.driver ?? message.payload?.currentRace?.driver;
+          const nextDriver = payload?.driver ?? payload?.currentRace?.driver;
           if (nextDriver) setDriver(nextDriver);
           const nextPosition =
-            message.payload?.position ?? message.payload?.driver?.position;
-          if (
-            nextPosition &&
-            Number.isFinite(Number(nextPosition.lat)) &&
-            Number.isFinite(Number(nextPosition.lng))
-          ) {
-            setDriverPosition({
-              latitude: Number(nextPosition.lat),
-              longitude: Number(nextPosition.lng),
-            });
-          }
-          if (nextStatus === 213 && message.payload?.polyline) {
-            const coordinates = decodePolyline(message.payload.polyline);
-            if (coordinates.length > 1) {
-              setLiveRoute({
-                distanceMeters: Number(message.payload.distance ?? 0) * 1000,
-                durationSeconds: Number(message.payload.duration ?? 0) * 60,
-                coordinates,
-                polyline: message.payload.polyline,
-                source: 'server',
-              });
-            }
+            nextStatus === 111
+              ? coordinateFromPoint(nextDriver?.addressAcceptedRace) ??
+                coordinateFromPoint(payload?.position ?? payload?.driver?.position)
+              : coordinateFromPoint(payload?.position ?? payload?.driver?.position);
+          if (nextPosition) setDriverPosition(nextPosition);
+          if (nextStatus === 111) {
+            const nextRoute = routeFromPayload(
+              payload?.routeDriverPassenger ??
+                payload?.currentRace?.routeDriverPassenger,
+            );
+            if (nextRoute) setLiveRoute(nextRoute);
+          } else if (nextStatus === 112) {
+            const nextRoute = routeFromPayload(
+              payload?.routeOriginDestination ??
+                payload?.currentRace?.routeOriginDestination,
+            );
+            if (nextRoute) setLiveRoute(nextRoute);
+          } else if (nextStatus === 213) {
+            const nextRoute = routeFromPayload(
+              {
+                polyline: payload?.polyline,
+                distance: { value: payload?.distance },
+                duration: { value: payload?.duration },
+              },
+              60,
+            );
+            if (nextRoute) setLiveRoute(nextRoute);
           }
         } catch {
           return;
@@ -179,6 +224,21 @@ export function RideProvider({ children }: { children: ReactNode }) {
     [stop],
   );
 
+  const driverId = driver?.taxiDriverId ?? driver?.driverId;
+  const cityId = profile?.currentRace?.city?.cityId ?? profile?.city?.cityId ?? '1';
+
+  useEffect(() => {
+    let active = true;
+    setDriverPhotoUrl(null);
+    if (!driverId) return () => { active = false; };
+    void getDriverPhotoUrl(cityId, driverId).then((url) => {
+      if (active) setDriverPhotoUrl(url);
+    });
+    return () => {
+      active = false;
+    };
+  }, [cityId, driverId]);
+
   useEffect(() => stop, [stop]);
 
   const value = useMemo(
@@ -188,11 +248,12 @@ export function RideProvider({ children }: { children: ReactNode }) {
       connection,
       driver,
       driverPosition,
+      driverPhotoUrl,
       liveRoute,
       start,
       stop,
     }),
-    [stage, statusId, connection, driver, driverPosition, liveRoute, start, stop],
+    [stage, statusId, connection, driver, driverPosition, driverPhotoUrl, liveRoute, start, stop],
   );
 
   return <RideContext.Provider value={value}>{children}</RideContext.Provider>;

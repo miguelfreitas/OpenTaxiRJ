@@ -1,5 +1,5 @@
 import type { Coordinate, FareOption, Place, RouteInfo } from '../types/booking';
-import { API_BASE_URL, WS_URL } from '../config';
+import { API_BASE_URL, DRIVER_PHOTO_BASE_URL, WS_URL } from '../config';
 import { decodePolyline } from '../utils/polyline';
 import { getClientVersion, getPassengerInfo, getSignInClientInfo } from '../services/clientInfo';
 
@@ -40,8 +40,22 @@ export type EligiblePaymentMethod = {
 export type RacePoint = {
   formattedAddress?: string;
   position?: { lat?: number; lng?: number };
+  coords?: { lat?: number; lng?: number };
   latitude?: number;
   longitude?: number;
+};
+
+export type DriverPayload = {
+  displayName?: string;
+  name?: string;
+  carModel?: string;
+  carLicensePlate?: string;
+  carPlate?: string;
+  phoneNumber?: string;
+  taxiDriverId?: string;
+  driverId?: string;
+  addressAcceptedRace?: RacePoint;
+  position?: { lat?: number; lng?: number };
 };
 
 export type PassengerCurrentRace = {
@@ -64,7 +78,8 @@ export type PassengerCurrentRace = {
   };
   raceDiscount?: { id?: string; fare?: string; flag?: string };
   estimatedPrice?: string | number;
-  driver?: { name?: string; carModel?: string; carPlate?: string };
+  driver?: DriverPayload;
+  city?: { cityId?: string; cityName?: string };
 };
 
 export type PassengerProfile = {
@@ -313,6 +328,32 @@ export async function getPassengerProfile() {
     '/aboutme/aboutMePassenger',
   );
   return (data.payload ?? data) as PassengerProfile;
+}
+
+const SPECIAL_PHOTO_CITY = '5e2b16adfb8eba33461db886';
+
+export async function getDriverPhotoUrl(cityId: string | undefined, driverId: string) {
+  const city = String(cityId ?? '').trim();
+  const path = city && city !== SPECIAL_PHOTO_CITY ? `${city}/${driverId}` : driverId;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`${DRIVER_PHOTO_BASE_URL}/${path}`, {
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json, text/plain, */*',
+        ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+        PassengerInfo: JSON.stringify(getPassengerInfo()),
+      },
+    });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { url?: unknown };
+    return typeof body.url === 'string' && body.url ? body.url : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function updatePassengerProfile(input: {

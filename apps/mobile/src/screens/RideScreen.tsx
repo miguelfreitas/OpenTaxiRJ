@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   BackHandler,
+  Image,
+  Linking,
   Modal,
   Pressable,
   StatusBar,
@@ -28,6 +30,8 @@ import { useBooking } from '../state/BookingContext';
 import { useRide } from '../state/RideContext';
 import { colors } from '../theme';
 import type { RootStackParamList } from '../navigation/types';
+import { driverInitial, driverName, driverVehicle } from '../utils/driver';
+import { digitsOnly, formatPhoneNumber } from '../utils/phone';
 import { formatBRL, formatDistance, formatDuration, toLngLat } from '../utils/geo';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Ride'>;
@@ -35,7 +39,17 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Ride'>;
 export function RideScreen({ navigation, route: navRoute }: Props) {
   const { origin, destination, route, fare, reset } = useBooking();
   const { clearActiveRide } = useAuth();
-  const { stage, statusId, connection, driver, driverPosition, liveRoute, start, stop } = useRide();
+  const {
+    stage,
+    statusId,
+    connection,
+    driver,
+    driverPosition,
+    driverPhotoUrl,
+    liveRoute,
+    start,
+    stop,
+  } = useRide();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<CameraRef>(null);
   const allowLeaveRef = useRef(false);
@@ -287,14 +301,32 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
         {driver ? (
           <View style={styles.driverCard}>
             <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{driver.name?.charAt(0) ?? 'M'}</Text>
+              {driverPhotoUrl ? (
+                <Image source={{ uri: driverPhotoUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{driverInitial(driver)}</Text>
+              )}
             </View>
             <View style={styles.driverText}>
-              <Text style={styles.driverName}>{driver.name ?? 'Motorista'}</Text>
+              <Text style={styles.driverName}>{driverName(driver)}</Text>
               <Text style={styles.driverCar}>
-                {[driver.carModel, driver.carPlate].filter(Boolean).join(' · ') ||
-                  'Dados do veículo aguardando'}
+                {driverVehicle(driver) || 'Dados do veículo aguardando'}
               </Text>
+              {driver.phoneNumber ? (
+                <Pressable
+                  accessibilityRole="link"
+                  onPress={() =>
+                    void Linking.openURL(`tel:0${digitsOnly(driver.phoneNumber ?? '')}`).catch(
+                      () => undefined,
+                    )
+                  }
+                  style={({ pressed }) => [styles.phoneLink, pressed && styles.pressed]}
+                >
+                  <Text style={styles.phoneText}>
+                    Ligar {formatPhoneNumber(driver.phoneNumber)}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         ) : null}
@@ -431,11 +463,14 @@ const styles = StyleSheet.create({
   metric: { color: colors.text, fontSize: 12, fontWeight: '700' },
   metricSeparator: { color: colors.muted, marginHorizontal: 6 },
   driverCard: { alignItems: 'center', backgroundColor: '#FFF7D6', borderRadius: 14, flexDirection: 'row', marginTop: 10, padding: 12 },
-  avatar: { alignItems: 'center', backgroundColor: colors.text, borderRadius: 22, height: 44, justifyContent: 'center', width: 44 },
+  avatar: { alignItems: 'center', backgroundColor: colors.text, borderRadius: 22, height: 44, justifyContent: 'center', overflow: 'hidden', width: 44 },
+  avatarImage: { height: '100%', width: '100%' },
   avatarText: { color: colors.pin, fontSize: 18, fontWeight: '900' },
   driverText: { flex: 1, marginLeft: 10 },
   driverName: { color: colors.text, fontSize: 15, fontWeight: '800' },
   driverCar: { color: colors.muted, fontSize: 12, marginTop: 2 },
+  phoneLink: { marginTop: 4 },
+  phoneText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 14 },
   cancelButton: { alignItems: 'center', borderColor: colors.border, borderRadius: 12, borderWidth: 1, flex: 1, justifyContent: 'center', minHeight: 50 },
   cancelText: { color: colors.danger, fontSize: 14, fontWeight: '800' },

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
+  Image,
+  Linking,
   Pressable,
   StatusBar,
   StyleSheet,
@@ -15,13 +17,15 @@ import { rateRide, skipRideRating } from '../api/client';
 import { useBooking } from '../state/BookingContext';
 import { useRide } from '../state/RideContext';
 import { colors } from '../theme';
+import { driverInitial, driverName, driverVehicle } from '../utils/driver';
+import { digitsOnly, formatPhoneNumber } from '../utils/phone';
 import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'RateRide'>;
 
 export function RateRideScreen({ navigation, route }: Props) {
   const { raceId } = route.params;
-  const { driver, stop } = useRide();
+  const { driver, driverPhotoUrl, stop } = useRide();
   const { reset } = useBooking();
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
@@ -68,14 +72,30 @@ export function RateRideScreen({ navigation, route }: Props) {
 
         <View style={styles.driverCard}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{driver?.name?.charAt(0) ?? 'M'}</Text>
+            {driverPhotoUrl ? (
+              <Image source={{ uri: driverPhotoUrl }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{driverInitial(driver)}</Text>
+            )}
           </View>
           <View style={styles.driverText}>
-            <Text style={styles.driverName}>{driver?.name ?? 'Motorista'}</Text>
-            <Text style={styles.driverCar}>
-              {[driver?.carModel, driver?.carPlate].filter(Boolean).join(' · ') ||
-                'Taxi.Rio'}
-            </Text>
+            <Text style={styles.driverName}>{driverName(driver)}</Text>
+            <Text style={styles.driverCar}>{driverVehicle(driver) || 'Taxi.Rio'}</Text>
+            {driver?.phoneNumber ? (
+              <Pressable
+                accessibilityRole="link"
+                onPress={() =>
+                  void Linking.openURL(
+                    `tel:0${digitsOnly(driver.phoneNumber ?? '')}`,
+                  ).catch(() => undefined)
+                }
+                style={({ pressed }) => [styles.phoneLink, pressed && styles.pressed]}
+              >
+                <Text style={styles.phoneText}>
+                  Ligar {formatPhoneNumber(driver.phoneNumber)}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
 
@@ -145,11 +165,14 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 26, fontWeight: '900', textAlign: 'center' },
   subtitle: { color: colors.muted, fontSize: 14, marginTop: 8, textAlign: 'center' },
   driverCard: { alignItems: 'center', backgroundColor: colors.surface, borderColor: colors.border, borderRadius: 16, borderWidth: 1, flexDirection: 'row', marginTop: 24, padding: 14 },
-  avatar: { alignItems: 'center', backgroundColor: colors.text, borderRadius: 24, height: 48, justifyContent: 'center', width: 48 },
+  avatar: { alignItems: 'center', backgroundColor: colors.text, borderRadius: 24, height: 48, justifyContent: 'center', overflow: 'hidden', width: 48 },
+  avatarImage: { height: '100%', width: '100%' },
   avatarText: { color: colors.pin, fontSize: 20, fontWeight: '900' },
   driverText: { flex: 1, marginLeft: 12 },
   driverName: { color: colors.text, fontSize: 16, fontWeight: '800' },
   driverCar: { color: colors.muted, fontSize: 12, marginTop: 3 },
+  phoneLink: { marginTop: 4 },
+  phoneText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
   sectionLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', letterSpacing: 1.4, marginTop: 24 },
   stars: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
   starButton: { paddingHorizontal: 7, paddingVertical: 4 },

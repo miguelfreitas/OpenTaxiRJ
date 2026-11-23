@@ -73,6 +73,12 @@ private release keystore before distributing the APK.
 pnpm typecheck
 ```
 
+## Protocol specification
+
+The complete protocol contract is in [`docs/PROTOCOL.md`](docs/PROTOCOL.md). It covers
+authentication, profile, route/fare/create, WebSocket ride states, driver payloads,
+payments/PIX, chat, rating, and the fake-stack verification matrix.
+
 ## Protocol identity
 
 The app reports its real version (`4.1.20`) and sends the same client metadata on each
@@ -83,6 +89,7 @@ request payloads.
 ## Runtime configuration
 
 The build reads `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_URL`,
-`EXPO_PUBLIC_RTDB_URL`, and `EXPO_PUBLIC_FIREBASE_EMULATOR` from `src/config.ts`.
+`EXPO_PUBLIC_RTDB_URL`, `EXPO_PUBLIC_FIREBASE_EMULATOR`, and
+`EXPO_PUBLIC_DRIVER_PHOTO_BASE_URL` from `src/config.ts`.
 Without them it uses the local fake API and local RTDB emulator. Sign-in stores the
 bearer token under `authToken` with AsyncStorage.

@@ -17,3 +17,10 @@ export function maskPhone(value: string) {
   if (digits.length < 11) return formatPhoneInput(digits);
   return `(${digits.slice(0, 2)}) •••••-${digits.slice(-4)}`;
 }
+
+export function formatPhoneNumber(value: string | undefined) {
+  if (!value) return '';
+  const digits = digitsOnly(value);
+  if (digits.length === 0 || digits.length > 11) return value;
+  return digits.replace(/(\d{2})(\d{4,5})(\d{4})/, '($1) $2-$3');
+}
