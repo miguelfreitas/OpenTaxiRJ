@@ -413,10 +413,11 @@ Payment semantics:
 }
 ```
 
-A 200 response creates the ride and returns at least `{ raceId, statusId }`; the fake
-returns the full race object. The client moves to FindingDriver and waits for WebSocket
-events. 402 is a payment refusal in the fake contract; 202 is accepted by the original
-for non-payment success paths covered by the static inventory.
+A 202 response creates the ride and returns `{ raceId, timeOut, message }`; the fake
+returns the full race object. The real response observed in the 2026-11-24 ride was
+`202` with `{ "message": "Procurando taxistas...", "raceId": "...", "timeOut": "60" }`.
+The client moves to FindingDriver and waits for WebSocket events. 402 is a payment
+refusal in the fake contract; 200 is accepted by the client for older fake responses.
 
 ## 8. Realtime ride protocol
 
@@ -448,7 +449,7 @@ The client sends a location update:
 | 90 | Payment refused; `payload.refuseReason`, error `ws_refused_credit_card` |
 | 100 | Current-race/status update, restore, or progress update |
 | 101 | `setBaratinhas(payload)` (excluded) |
-| 102 | Driver position; `payload.position.lat/lng`; may request recalculation |
+| 102 | Driver position; `payload.position.lat/lng` and optional `isFromReactNative`; may request recalculation |
 | 103 | Cancellation; reset to WithoutRace, reset countdown |
 | 104 | Reset on-street pairing |
 | 105 | Refresh passenger/status |
@@ -458,9 +459,15 @@ The client sends a location update:
 | 113 | Race finished; RaceFinished/rating |
 | 114 | Finished status in `currentRace`; clone maps to finished |
 | 199 | Client-to-server location update |
-| 213 | Route recalculation; polyline, distance, duration |
+| 213 | Current-phase route snapshot (can follow 111/112 or update mid-ride); polyline, distance in km, duration in minutes |
 
 ### 8.3 Status 111: acceptance
+
+Real 111 sends a partial `driver` containing `addressAcceptedRace`; the full driver
+record arrives in `aboutMePassenger.currentRace.driver` and may include `_id`,
+`displayName`, `phoneNumber`, `taxiDriverId`, `carModel`, `carLicensePlate`, `average`,
+`driverType`, and `geolocationData`. Merge partial driver frames with the prior driver
+instead of replacing the object.
 
 Required payload content:
 
@@ -506,41 +513,78 @@ legacy `name`/`carPlate` fallbacks.
 ### 8.4 Status 112: in race
 
 The original reads `payload.routeOriginDestination` and updates distance, duration, and
-polyline. It sets the passenger state to InRace and clears on-street pairing.
+polyline. It sets the passenger state to InRace and clears on-street pairing. Real 112
+can carry a partial `driver` with only `driverType` and `geolocationData`; merge it into
+the existing driver.
 
 The clone now applies the same route update. A payload without a valid polyline leaves
 the previous route intact.
 
 ### 8.5 Status 102: driver position
 
-`payload.position.lat/lng` is required. Top-level `latitude`/`longitude` is not accepted
-by the original and caused `Cannot read property 'lat' of undefined` in the harness.
+`payload.position.lat/lng` is required; real frames also include
+`isFromReactNative: true`. Top-level `latitude`/`longitude` is not accepted by the
+original and caused `Cannot read property 'lat' of undefined` in the harness.
 
 The clone clears the taxi marker on a null or invalid position only when a new ride
 starts or the ride stops; a valid 102 updates the marker.
 
-### 8.6 Status 213: route recalculation
+### 8.6 Status 213: route snapshot
 
-Expected:
+Real 111 and 112 can be followed immediately by 213 with the current phase route. A
+mid-ride 213 can also replace the remaining route. Real payload observed on 2026-11-24:
 
 ```json
 {
   "statusId": 213,
   "payload": {
     "polyline": "<encoded polyline>",
-    "distance": 1200,
-    "duration": 5
+    "distance": 2.82,
+    "duration": 9.433333333333334
   }
 }
 ```
 
-- `distance` is treated as the remaining distance in metres by the clone and is not
-  multiplied.
-- `duration` is minutes; the original and clone multiply by 60 for seconds.
-- The fake server now emits metres and minutes consistently; the earlier fake emitted
-  kilometres or seconds in different scenarios.
+- `distance` is in kilometres; multiply by 1000 for metres. A preceding
+  `routeOriginDestination.distance.value` of `2820` matched `213.distance: 2.82`.
+- `duration` is in minutes; multiply by 60 for seconds. `9.4333` minutes matched
+  `566` seconds.
+- The fake server now emits the real units and the client applies both multipliers.
 
-### 8.7 Cancellation and recovery
+### 8.7 Status 113: finished fare
+
+Real 113 carries the final fare directly in `payload` (not only inside `currentRace`):
+
+```json
+{
+  "statusId": 113,
+  "payload": {
+    "raceId": "...",
+    "total": "30,36",
+    "discount": "6,07",
+    "discountValue": "24,29",
+    "priceToPay": "24,29",
+    "raceDiscount": { "fare": "20%", "flag": "Bandeira 1" },
+    "associatedPaymentMethod": { "pindex": 1, "name": "Dinheiro" },
+    "tolls": [],
+    "invalid": false,
+    "suspect": false,
+    "driver": {
+      "displayName": "Motorista",
+      "carModel": "KICKS",
+      "carLicensePlate": "ABC1D23"
+    }
+  }
+}
+```
+
+- Money strings use comma decimals; `total - discount = priceToPay` in the observed
+  frame.
+- `driver` is partial; merge it into the existing driver so phone/photo/ID survive.
+- The clone surfaces total, discount, tolls, amount to pay, and payment method on the
+  rating screen.
+
+### 8.8 Cancellation and recovery
 
 Cancellation:
 
@@ -558,7 +602,7 @@ Startup recovery:
 - A recovered 103 returns home.
 - The original may also restore from `statusId` and route fields in `currentRace`.
 
-### 8.8 Reconnect and stale-ride reconciliation
+### 8.9 Reconnect and stale-ride reconciliation
 
 The WebSocket can drop after status 111 while the server later closes the ride. If
 the terminal 103 is missed, the client must not trust the last rendered state.
@@ -589,6 +633,13 @@ The clone now:
 - Preserves the latest live `102` position and `213` route when a profile refresh
   returns the same status; otherwise a watchdog refresh could reset the car to the
   accepted position and the line to the initial route.
+- Runs origin recovery only while Origin is focused, and starts `RideScreen` once per
+  `raceId`; an earlier build re-navigated on profile status changes and reconnected the
+  socket five times in one real ride.
+- Runs RouteFare's route/fare reload only while focused and keyed by the payment
+  identity, so a background refresh cannot replace the selected discount.
+- Resets ride stage/status in `stop`, preventing a stale finished state from sending a
+  new ride straight to the rating screen.
 
 This was reproduced on the emulator: accept a fake ride, kill the WebSocket/server
 while clearing the fake server’s current race, then let the client reconnect. The
@@ -717,8 +768,7 @@ Closed in the clone:
 - Driver photo is fetched by `taxiDriverId`/`driverId`, with city-aware URL construction.
 - Status 111/112 route payloads update the live route.
 - Fake driver fixture includes the original field names and phone.
-- Status 213 fake payload units are consistent with the original's metres/minutes
-  contract.
+- Status 213 real units are kilometres/minutes, fixed in the client and fake server.
 - Clone marker movement and `213` polyline shortening are verified on the emulator.
 - Original-vs-clone A/B completed with the installed original 4.1.20: visible taxi
   marker, in-race route/ETA update, and rating reached; clone produced the same
@@ -727,9 +777,9 @@ Closed in the clone:
 Still divergent or unverified:
 
 - Original 4.1.22 reports `appVersion 4.1.22`; clone reports `4.1.20`.
-- Original `102` requests a fresh driver-to-destination route; clone currently
-  relies on `213` for the route update. Original visual A/B is complete; the route
-  recalculation path remains a parity difference, not an observed visual failure.
+- Original `102` requests a fresh driver-to-destination route; clone relies on `213`
+  for the route update. Real 213 may be a current-phase snapshot rather than a
+  mid-ride recalculation; the clone treats it as authoritative for the live route.
 - Original 4.1.22 exposes a separate email-code login path; clone exposes E-mail, SMS,
   and WhatsApp code delivery.
 - Original rating submission was not captured; only `notRating` was.

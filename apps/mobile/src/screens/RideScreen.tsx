@@ -51,18 +51,30 @@ export function RideScreen({ navigation, route: navRoute }: Props) {
     stop,
   } = useRide();
   const insets = useSafeAreaInsets();
+  const { raceId, initialStatusId } = navRoute.params;
   const cameraRef = useRef<CameraRef>(null);
   const allowLeaveRef = useRef(false);
+  const startedRaceRef = useRef<string | null>(null);
+  const startRef = useRef(start);
+  startRef.current = start;
+  const stopRef = useRef(stop);
+  stopRef.current = stop;
+  const initialStatusRef = useRef(initialStatusId);
+  initialStatusRef.current = initialStatusId;
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [cancelling, setCancelling] = useState(false);
 
-  const { raceId, initialStatusId } = navRoute.params;
   const activeRoute = liveRoute ?? route;
 
   useEffect(() => {
-    start(raceId, initialStatusId);
-    return () => stop();
-  }, [initialStatusId, raceId, start, stop]);
+    if (startedRaceRef.current === raceId) return;
+    startedRaceRef.current = raceId;
+    startRef.current(raceId, initialStatusRef.current);
+    return () => {
+      startedRaceRef.current = null;
+      stopRef.current();
+    };
+  }, [raceId]);
 
   useEffect(() => {
     const hardwareBack = BackHandler.addEventListener('hardwareBackPress', () => {

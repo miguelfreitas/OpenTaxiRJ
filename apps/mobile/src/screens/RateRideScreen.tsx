@@ -18,6 +18,7 @@ import { useBooking } from '../state/BookingContext';
 import { useRide } from '../state/RideContext';
 import { colors } from '../theme';
 import { driverInitial, driverName, driverVehicle } from '../utils/driver';
+import { formatBRL } from '../utils/geo';
 import { digitsOnly, formatPhoneNumber } from '../utils/phone';
 import type { RootStackParamList } from '../navigation/types';
 
@@ -25,7 +26,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'RateRide'>;
 
 export function RateRideScreen({ navigation, route }: Props) {
   const { raceId } = route.params;
-  const { driver, driverPhotoUrl, stop } = useRide();
+  const { driver, driverPhotoUrl, finalFare, stop } = useRide();
   const { reset } = useBooking();
   const insets = useSafeAreaInsets();
   const [rating, setRating] = useState(0);
@@ -98,6 +99,44 @@ export function RateRideScreen({ navigation, route }: Props) {
             ) : null}
           </View>
         </View>
+
+        {finalFare &&
+        (finalFare.total !== null ||
+          finalFare.discount !== null ||
+          finalFare.priceToPay !== null) ? (
+          <View style={styles.fareCard}>
+            <Text style={styles.fareTitle}>Resumo da corrida</Text>
+            {finalFare.total !== null ? (
+              <View style={styles.fareRow}>
+                <Text style={styles.fareLabel}>Total</Text>
+                <Text style={styles.fareValue}>{formatBRL(finalFare.total)}</Text>
+              </View>
+            ) : null}
+            {finalFare.discount !== null && finalFare.discount > 0 ? (
+              <View style={styles.fareRow}>
+                <Text style={styles.fareLabel}>
+                  Desconto{finalFare.discountLabel ? ` (${finalFare.discountLabel})` : ''}
+                </Text>
+                <Text style={styles.fareValue}>- {formatBRL(finalFare.discount)}</Text>
+              </View>
+            ) : null}
+            {finalFare.tolls !== null && finalFare.tolls > 0 ? (
+              <View style={styles.fareRow}>
+                <Text style={styles.fareLabel}>Pedágio</Text>
+                <Text style={styles.fareValue}>{formatBRL(finalFare.tolls)}</Text>
+              </View>
+            ) : null}
+            {finalFare.priceToPay !== null ? (
+              <View style={[styles.fareRow, styles.fareTotalRow]}>
+                <Text style={styles.fareTotalLabel}>A pagar</Text>
+                <Text style={styles.fareTotalValue}>{formatBRL(finalFare.priceToPay)}</Text>
+              </View>
+            ) : null}
+            {finalFare.paymentLabel ? (
+              <Text style={styles.farePayment}>{finalFare.paymentLabel}</Text>
+            ) : null}
+          </View>
+        ) : null}
 
         <Text style={styles.sectionLabel}>SUA AVALIAÇÃO</Text>
         <View style={styles.stars}>
@@ -173,6 +212,27 @@ const styles = StyleSheet.create({
   driverCar: { color: colors.muted, fontSize: 12, marginTop: 3 },
   phoneLink: { marginTop: 4 },
   phoneText: { color: colors.accent, fontSize: 12, fontWeight: '800' },
+  fareCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginTop: 16,
+    padding: 14,
+  },
+  fareTitle: { color: colors.text, fontSize: 14, fontWeight: '900', marginBottom: 4 },
+  fareRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  fareLabel: { color: colors.muted, fontSize: 13 },
+  fareValue: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  fareTotalRow: { borderTopColor: colors.border, borderTopWidth: 1, marginTop: 12, paddingTop: 10 },
+  fareTotalLabel: { color: colors.text, fontSize: 15, fontWeight: '900' },
+  fareTotalValue: { color: colors.text, fontSize: 18, fontWeight: '900' },
+  farePayment: { color: colors.muted, fontSize: 11, marginTop: 8 },
   sectionLabel: { color: colors.muted, fontSize: 11, fontWeight: '800', letterSpacing: 1.4, marginTop: 24 },
   stars: { flexDirection: 'row', justifyContent: 'center', marginTop: 8 },
   starButton: { paddingHorizontal: 7, paddingVertical: 4 },

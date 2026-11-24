@@ -12,6 +12,7 @@ import {
 import { getApiToken, sendDriverMessage } from '../api/client';
 import { RTDB_URL, USE_FIREBASE_EMULATOR } from '../config';
 import type { RideDriver } from '../state/RideContext';
+import { rideLog } from './rideLog';
 
 export type ChatMessage = {
   id: string;
@@ -82,11 +83,15 @@ export function subscribeToChat(
   };
 
   const unsubscribePassenger = onValue(passengerRef, (snapshot) => {
-    passenger = normalizeMessages(snapshot.val(), false);
+    const raw = snapshot.val();
+    rideLog.event('chat.snapshot', { box: 'Passenger', raceId, raw });
+    passenger = normalizeMessages(raw, false);
     emit();
   });
   const unsubscribeDriver = onValue(driverRef, (snapshot) => {
-    driver = normalizeMessages(snapshot.val(), true);
+    const raw = snapshot.val();
+    rideLog.event('chat.snapshot', { box: 'Driver', raceId, raw });
+    driver = normalizeMessages(raw, true);
     emit();
   });
 
@@ -112,16 +117,20 @@ export async function sendChatMessage(
   const messagesRef = ref(db(), chatPath(raceId, 'Driver'));
   const messageRef = push(messagesRef);
   const messageCode = messageRef.key ?? `${Date.now()}`;
+  rideLog.event('chat.send', { raceId, messageCode, text: trimmed });
   await set(messageRef, {
     messageCode,
     messageText: trimmed,
     read: false,
     time: Date.now(),
   });
+  rideLog.event('chat.persisted', { raceId, messageCode });
 
   try {
-    await sendDriverMessage(raceId, trimmed);
-  } catch {
+    const response = await sendDriverMessage(raceId, trimmed);
+    rideLog.event('chat.api_response', { raceId, messageCode, response });
+  } catch (error) {
+    rideLog.error('chat.api_error', { raceId, messageCode, error });
     return;
   }
 }

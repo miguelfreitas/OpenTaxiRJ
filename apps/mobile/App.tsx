@@ -1,4 +1,5 @@
-import { ActivityIndicator, LogBox, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, AppState, LogBox, View } from 'react-native';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -18,6 +19,9 @@ import { BookingProvider } from './src/state/BookingContext';
 import { RideProvider } from './src/state/RideContext';
 import { colors } from './src/theme';
 import type { RootStackParamList } from './src/navigation/types';
+import { API_BASE_URL, WS_URL } from './src/config';
+import { getClientVersion } from './src/services/clientInfo';
+import { initRideLog, rideLog } from './src/services/rideLog';
 
 LogBox.ignoreLogs(['MapLibre Native [ERROR] [Mbgl-MapRenderer] std::bad_alloc']);
 
@@ -81,6 +85,28 @@ function RootNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    const errorUtils = (globalThis as { ErrorUtils?: {
+      getGlobalHandler?: () => (error: Error, isFatal: boolean) => void;
+      setGlobalHandler?: (handler: (error: Error, isFatal: boolean) => void) => void;
+    } }).ErrorUtils;
+    const previous = errorUtils?.getGlobalHandler?.();
+    errorUtils?.setGlobalHandler?.((error, isFatal) => {
+      rideLog.error('global', { error, isFatal });
+      previous?.(error, isFatal);
+    });
+
+    void initRideLog({
+      appVersion: getClientVersion(),
+      apiHost: API_BASE_URL,
+      wsHost: WS_URL,
+    });
+    const subscription = AppState.addEventListener('change', (state) => {
+      rideLog.event('app.state', { state });
+    });
+    return () => subscription.remove();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>

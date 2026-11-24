@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { PlacePicker } from './PlacePicker';
 import { useAuth } from '../state/AuthContext';
 import { useBooking } from '../state/BookingContext';
 import type { RootStackParamList } from '../navigation/types';
 import type { Place, RouteInfo } from '../types/booking';
+import type { RacePoint } from '../api/client';
 import { decodePolyline } from '../utils/polyline';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Origin'>;
@@ -12,7 +14,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Origin'>;
 const RECOVERABLE_STATUSES = new Set([100, 110, 111, 112]);
 
 function racePointToPlace(
-  point: { formattedAddress?: string; position?: { lat?: number; lng?: number }; latitude?: number; longitude?: number } | undefined,
+  point: RacePoint | undefined,
   id: string,
   fallback: string,
 ): Place | null {
@@ -53,14 +55,15 @@ function recoveredRoute(
 export function OriginScreen({ navigation }: Props) {
   const { origin, setOrigin, setDestination, setRoute, setFare } = useBooking();
   const { profile, clearActiveRide } = useAuth();
+  const isFocused = useIsFocused();
   const recoveredRef = useRef<string | null>(null);
 
   useEffect(() => {
+    if (!isFocused) return;
     const race = profile?.currentRace;
     const raceId = race?.raceId;
     const statusId = Number(race?.statusId ?? profile?.statusId);
     if (!raceId || !RECOVERABLE_STATUSES.has(statusId)) {
-      recoveredRef.current = null;
       return;
     }
     if (recoveredRef.current === raceId) return;
@@ -92,7 +95,7 @@ export function OriginScreen({ navigation }: Props) {
     }
     clearActiveRide();
     navigation.navigate('Ride', { raceId, initialStatusId: statusId });
-  }, [clearActiveRide, navigation, profile, setDestination, setFare, setOrigin, setRoute]);
+  }, [clearActiveRide, isFocused, navigation, profile, setDestination, setFare, setOrigin, setRoute]);
 
   return (
     <PlacePicker

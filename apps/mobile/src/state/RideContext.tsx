@@ -13,11 +13,22 @@ import { getApiToken, getDriverPhotoUrl, WS_URL, type DriverPayload } from '../a
 import { useAuth } from './AuthContext';
 import type { Coordinate, RouteInfo } from '../types/booking';
 import { decodePolyline } from '../utils/polyline';
+import { parseBRL } from '../utils/money';
+import { rideLog } from '../services/rideLog';
 
 export type RideStage = 'idle' | 'finding' | 'waiting' | 'in_race' | 'finished';
 export type RideConnection = 'idle' | 'connecting' | 'open' | 'closed';
 
 export type RideDriver = DriverPayload;
+
+export type RideFinalFare = {
+  total: number | null;
+  discount: number | null;
+  priceToPay: number | null;
+  discountLabel: string | null;
+  paymentLabel: string | null;
+  tolls: number | null;
+};
 
 type RideContextValue = {
   stage: RideStage;
@@ -27,6 +38,7 @@ type RideContextValue = {
   driverPosition: Coordinate | null;
   driverPhotoUrl: string | null;
   liveRoute: RouteInfo | null;
+  finalFare: RideFinalFare | null;
   start: (raceId: string, initialStatusId?: number) => void;
   stop: () => void;
 };
@@ -53,9 +65,19 @@ type RoutePayload = {
   duration?: { value?: number };
 };
 
-type Point = { lat?: number; lng?: number; latitude?: number; longitude?: number };
+type Point = { lat?: number | string; lng?: number | string; latitude?: number | string; longitude?: number | string };
 
-type CurrentRace = {
+type FarePayload = {
+  total?: unknown;
+  discount?: unknown;
+  discountValue?: unknown;
+  priceToPay?: unknown;
+  raceDiscount?: { fare?: string; flag?: string };
+  associatedPaymentMethod?: { name?: string; pindex?: number };
+  tolls?: unknown;
+};
+
+type CurrentRace = FarePayload & {
   raceId?: string;
   statusId?: number;
   driver?: RideDriver;
@@ -65,7 +87,7 @@ type CurrentRace = {
 
 type RideMessage = {
   statusId?: number;
-  payload?: {
+  payload?: FarePayload & {
     driver?: RideDriver & { position?: Point; addressAcceptedRace?: Point };
     currentRace?: CurrentRace;
     routeDriverPassenger?: RoutePayload;
@@ -76,6 +98,33 @@ type RideMessage = {
     duration?: number;
   };
 };
+
+function finalFareFrom(payload: FarePayload | null | undefined): RideFinalFare | null {
+  if (!payload) return null;
+  const total = parseBRL(payload.total);
+  const discount = parseBRL(payload.discount);
+  const priceToPay = parseBRL(payload.priceToPay);
+  if (total === null && discount === null && priceToPay === null) return null;
+  const tolls = Array.isArray(payload.tolls)
+    ? payload.tolls.reduce<number | null>((sum, item) => {
+        const value =
+          typeof item === 'number'
+            ? item
+            : item && typeof item === 'object'
+              ? parseBRL((item as { value?: unknown }).value)
+              : null;
+        return value === null ? sum : (sum ?? 0) + value;
+      }, null)
+    : null;
+  return {
+    total,
+    discount,
+    priceToPay,
+    discountLabel: payload.raceDiscount?.fare?.trim() || null,
+    paymentLabel: payload.associatedPaymentMethod?.name?.trim() || null,
+    tolls,
+  };
+}
 
 function coordinateFromPoint(point: Point | null | undefined): Coordinate | null {
   if (!point) return null;
@@ -88,11 +137,12 @@ function coordinateFromPoint(point: Point | null | undefined): Coordinate | null
 function routeFromPayload(
   payload: RoutePayload | undefined,
   durationMultiplier = 1,
+  distanceMultiplier = 1,
 ): RouteInfo | null {
   if (!payload?.polyline) return null;
   const coordinates = decodePolyline(payload.polyline);
   if (coordinates.length < 2) return null;
-  const distanceMeters = Number(payload.distance?.value ?? 0);
+  const distanceMeters = Number(payload.distance?.value ?? 0) * distanceMultiplier;
   const durationSeconds = Number(payload.duration?.value ?? 0) * durationMultiplier;
   if (!Number.isFinite(distanceMeters) || !Number.isFinite(durationSeconds)) return null;
   return {
@@ -120,6 +170,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
   const watchdogTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reconcileSeqRef = useRef(0);
   const raceIdRef = useRef<string | null>(null);
+  const driverShapeRef = useRef('');
 
   const [stage, setStage] = useState<RideStage>('idle');
   const [statusId, setStatusId] = useState<number | null>(null);
@@ -130,6 +181,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
   const [driverPosition, setDriverPosition] = useState<Coordinate | null>(null);
   const [driverPhotoUrl, setDriverPhotoUrl] = useState<string | null>(null);
   const [liveRoute, setLiveRoute] = useState<RouteInfo | null>(null);
+  const [finalFare, setFinalFare] = useState<RideFinalFare | null>(null);
   const { profile, refreshProfile } = useAuth();
   const profileRef = useRef(profile);
   profileRef.current = profile;
@@ -157,6 +209,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const stop = useCallback(() => {
+    if (raceIdRef.current) rideLog.event('ride.stop', { raceId: raceIdRef.current });
     raceIdRef.current = null;
     clearReconnect();
     clearWatchdog();
@@ -170,6 +223,8 @@ export function RideProvider({ children }: { children: ReactNode }) {
       socket.close();
     }
     setConnection('idle');
+    setStage('idle');
+    setStatusId(null);
     setDriverPosition(null);
     setLiveRoute(null);
   }, [clearReconnect, clearWatchdog]);
@@ -183,7 +238,16 @@ export function RideProvider({ children }: { children: ReactNode }) {
       if (nextStage) setStage(nextStage);
     }
     if (race.driver) {
-      setDriver(race.driver);
+      const shape = Object.keys(race.driver).sort().join(',');
+      if (shape !== driverShapeRef.current) {
+        driverShapeRef.current = shape;
+        rideLog.driver('profile.shape', race.driver, {
+          raceId: race.raceId,
+          statusId: nextStatus,
+          shape,
+        });
+      }
+      setDriver((current) => ({ ...current, ...race.driver }));
       const position =
         coordinateFromPoint(race.driver.addressAcceptedRace) ??
         coordinateFromPoint(race.driver.position);
@@ -199,6 +263,10 @@ export function RideProvider({ children }: { children: ReactNode }) {
     if (nextRoute && (force || !sameStatus || !liveRouteRef.current)) {
       setLiveRoute(nextRoute);
     }
+    if (nextStatus === 113 || nextStatus === 114) {
+      const fare = finalFareFrom(race);
+      if (fare) setFinalFare(fare);
+    }
     if (nextStatus === 103) {
       setDriverPosition(null);
       setLiveRoute(null);
@@ -213,6 +281,13 @@ export function RideProvider({ children }: { children: ReactNode }) {
         const nextProfile = await refreshProfile();
         if (seq !== reconcileSeqRef.current || raceIdRef.current !== raceId) return;
         const race = nextProfile?.currentRace;
+        rideLog.event('profile.reconcile', {
+          raceId,
+          found: Boolean(race),
+          foundRaceId: race?.raceId ?? null,
+          statusId: race?.statusId ?? null,
+          hasDriver: Boolean(race?.driver),
+        });
         if (!race) {
           setStage('idle');
           setStatusId(103);
@@ -259,16 +334,20 @@ export function RideProvider({ children }: { children: ReactNode }) {
       }
       socketRef.current = socket;
       setConnection('connecting');
+      rideLog.ws('connecting', { raceId, attempt, url: WS_URL });
 
       socket.onopen = () => {
         if (socketRef.current !== socket) return;
+        rideLog.ws('open', { raceId, attempt });
         setConnection('open');
         void reconcileProfile(raceId);
       };
 
       socket.onmessage = (event) => {
+        const raw = typeof event.data === 'string' ? event.data : String(event.data);
+        rideLog.wsMessage(raw, { raceId, attempt });
         try {
-          const message = JSON.parse(String(event.data)) as RideMessage;
+          const message = JSON.parse(raw) as RideMessage;
           const payload = message.payload;
           const currentRace = payload?.currentRace;
           if (currentRace?.raceId && currentRace.raceId !== raceIdRef.current) return;
@@ -289,7 +368,19 @@ export function RideProvider({ children }: { children: ReactNode }) {
           const nextStage = stageFor(nextStatus);
           if (nextStage) setStage(nextStage);
           const nextDriver = payload?.driver ?? currentRace?.driver;
-          if (nextDriver) setDriver(nextDriver);
+          if (nextDriver) {
+            const shape = Object.keys(nextDriver).sort().join(',');
+            if (shape !== driverShapeRef.current) {
+              driverShapeRef.current = shape;
+              rideLog.driver('ws.shape', nextDriver, {
+                raceId,
+                statusId: nextStatus,
+                currentRaceId: currentRace?.raceId ?? null,
+                shape,
+              });
+            }
+            setDriver((current) => ({ ...current, ...nextDriver }));
+          }
           const nextPosition =
             nextStatus === 111
               ? coordinateFromPoint(nextDriver?.addressAcceptedRace) ??
@@ -319,6 +410,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
                 duration: { value: payload?.duration },
               },
               60,
+              1000,
             );
             if (nextRoute) setLiveRoute(nextRoute);
           } else if (nextStatus === 100 || nextStatus === 110) {
@@ -331,12 +423,31 @@ export function RideProvider({ children }: { children: ReactNode }) {
             setDriverPosition(null);
             setLiveRoute(null);
           }
-        } catch {
+          if (nextStatus === 113 || nextStatus === 114) {
+            const fare = finalFareFrom(payload) ?? finalFareFrom(currentRace);
+            if (fare) setFinalFare(fare);
+          }
+          rideLog.rideState('ws', {
+            raceId,
+            statusId: nextStatus,
+            stage: stageFor(nextStatus),
+            hasDriver: Boolean(nextDriver),
+            position: nextPosition,
+            hasRoute: Boolean(
+              payload?.routeDriverPassenger ??
+                currentRace?.routeDriverPassenger ??
+                payload?.routeOriginDestination ??
+                currentRace?.routeOriginDestination,
+            ),
+          });
+        } catch (error) {
+          rideLog.ws('parse_error', { raceId, attempt, raw, error });
           return;
         }
       };
 
       socket.onerror = () => {
+        rideLog.ws('error', { raceId, attempt });
         if (socketRef.current === socket) setConnection('closed');
       };
 
@@ -345,6 +456,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
         setConnection('closed');
         clearReconnect();
         const delay = Math.min(1000 * 2 ** Math.min(attempt, 6), 10000);
+        rideLog.ws('close', { raceId, attempt, reconnectInMs: delay });
         reconnectTimerRef.current = setTimeout(() => {
           if (socketRef.current === socket) connectRef.current(raceId, attempt + 1);
         }, delay);
@@ -357,16 +469,19 @@ export function RideProvider({ children }: { children: ReactNode }) {
 
   const start = useCallback(
     (raceId: string, initialStatusId?: number) => {
+      rideLog.event('ride.start', { raceId, initialStatusId });
       stop();
       raceIdRef.current = raceId;
       startWatchdog(raceId);
       const initialStage = initialStatusId ? stageFor(initialStatusId) : null;
       setStage(initialStage ?? 'finding');
       setStatusId(initialStatusId ?? 100);
+      driverShapeRef.current = '';
       setDriver(null);
       setDriverPosition(null);
       setDriverPhotoUrl(null);
       setLiveRoute(null);
+      setFinalFare(null);
       setConnection('connecting');
 
       const recovered = profileRef.current?.currentRace;
@@ -399,6 +514,7 @@ export function RideProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       const raceId = raceIdRef.current;
+      rideLog.event('app.active', { raceId, connection: connectionRef.current });
       if (nextState !== 'active' || !raceId) return;
       if (connectionRef.current === 'closed') connectRef.current(raceId, 0);
       void reconcileProfile(raceId);
@@ -417,10 +533,22 @@ export function RideProvider({ children }: { children: ReactNode }) {
       driverPosition,
       driverPhotoUrl,
       liveRoute,
+      finalFare,
       start,
       stop,
     }),
-    [stage, statusId, connection, driver, driverPosition, driverPhotoUrl, liveRoute, start, stop],
+    [
+      stage,
+      statusId,
+      connection,
+      driver,
+      driverPosition,
+      driverPhotoUrl,
+      liveRoute,
+      finalFare,
+      start,
+      stop,
+    ],
   );
 
   return <RideContext.Provider value={value}>{children}</RideContext.Provider>;

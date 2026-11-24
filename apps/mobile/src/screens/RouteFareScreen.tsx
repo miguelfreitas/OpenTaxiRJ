@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import {
   ActivityIndicator,
   Alert,
@@ -63,6 +64,10 @@ export function RouteFareScreen({ navigation }: Props) {
     [associatedPayment, eligiblePaymentId],
   );
   const cityId = profile?.city?.cityId ?? '1';
+  const isFocused = useIsFocused();
+  const paymentRef = useRef(payment);
+  paymentRef.current = payment;
+  const paymentKey = `${payment?.pindex ?? ''}:${payment?.paymentId ?? ''}:${payment?.name ?? ''}`;
   const [activeCityId, setActiveCityId] = useState(String(cityId));
   const cameraRef = useRef<CameraRef>(null);
   const insets = useSafeAreaInsets();
@@ -76,7 +81,8 @@ export function RouteFareScreen({ navigation }: Props) {
   const [detail, setDetail] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!origin || !destination) return;
+    if (!origin || !destination || !isFocused) return;
+    const effectivePayment = paymentRef.current;
     let active = true;
     const load = async () => {
       setLoading(true);
@@ -101,7 +107,7 @@ export function RouteFareScreen({ navigation }: Props) {
         const originCity = await getMyOriginCity(origin.coordinate).catch(() => null);
         const resolvedCityId = String(originCity?.cityId ?? cityId);
         setActiveCityId(resolvedCityId);
-        const options = await getFareOptions(origin, destination, payment, resolvedCityId);
+        const options = await getFareOptions(origin, destination, effectivePayment, resolvedCityId);
         if (!active) return;
         setFares(options);
         setLocalFare(options[0]);
@@ -110,7 +116,7 @@ export function RouteFareScreen({ navigation }: Props) {
         if (!active) return;
         setError(cause instanceof Error ? cause.message : 'Não foi possível calcular a corrida.');
         setDetail(
-          `${formatApiError(cause, `tarifas (pindex ${payment?.pindex ?? 'auto'} ${typeof payment?.pindex}, paymentId ${payment?.paymentId ?? 'null'}, city ${activeCityId})`)}
+          `${formatApiError(cause, `tarifas (pindex ${effectivePayment?.pindex ?? 'auto'} ${typeof effectivePayment?.pindex}, paymentId ${effectivePayment?.paymentId ?? 'null'}, city ${activeCityId})`)}
 ` +
             `Servidor: ${API_BASE_URL}`,
         );
@@ -122,7 +128,7 @@ export function RouteFareScreen({ navigation }: Props) {
     return () => {
       active = false;
     };
-  }, [cityId, origin, destination, payment, setFare, setRoute]);
+  }, [cityId, isFocused, origin, destination, paymentKey, setFare, setRoute]);
 
   useEffect(() => {
     if (!route?.coordinates.length) return;

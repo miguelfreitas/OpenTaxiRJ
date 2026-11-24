@@ -2,6 +2,7 @@ import type { Coordinate, FareOption, Place, RouteInfo } from '../types/booking'
 import { API_BASE_URL, DRIVER_PHOTO_BASE_URL, WS_URL } from '../config';
 import { decodePolyline } from '../utils/polyline';
 import { getClientVersion, getPassengerInfo, getSignInClientInfo } from '../services/clientInfo';
+import { rideLog } from '../services/rideLog';
 
 export { API_BASE_URL, WS_URL };
 
@@ -39,13 +40,14 @@ export type EligiblePaymentMethod = {
 
 export type RacePoint = {
   formattedAddress?: string;
-  position?: { lat?: number; lng?: number };
-  coords?: { lat?: number; lng?: number };
-  latitude?: number;
-  longitude?: number;
+  position?: { lat?: number | string; lng?: number | string };
+  coords?: { lat?: number | string; lng?: number | string };
+  latitude?: number | string;
+  longitude?: number | string;
 };
 
 export type DriverPayload = {
+  _id?: string;
   displayName?: string;
   name?: string;
   carModel?: string;
@@ -54,8 +56,11 @@ export type DriverPayload = {
   phoneNumber?: string;
   taxiDriverId?: string;
   driverId?: string;
+  average?: number;
+  driverType?: string;
   addressAcceptedRace?: RacePoint;
-  position?: { lat?: number; lng?: number };
+  geolocationData?: { origin?: RacePoint; destination?: RacePoint };
+  position?: { lat?: number | string; lng?: number | string };
 };
 
 export type PassengerCurrentRace = {
@@ -80,6 +85,16 @@ export type PassengerCurrentRace = {
   estimatedPrice?: string | number;
   driver?: DriverPayload;
   city?: { cityId?: string; cityName?: string };
+  geolocationData?: { origin?: RacePoint; destination?: RacePoint };
+  tolls?: unknown[];
+  invalid?: boolean;
+  suspect?: boolean;
+  urlShareRace?: string;
+  discount?: string | number;
+  discountValue?: string | number;
+  total?: string | number;
+  priceToPay?: string | number;
+  associatedPaymentMethod?: AssociatedPaymentMethod;
 };
 
 export type PassengerProfile = {
@@ -179,39 +194,55 @@ async function requestWithStatus<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<AuthResult<T>> {
+  const method = (options.method ?? 'GET').toUpperCase();
+  const startedAt = Date.now();
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   const hasBody = options.body !== undefined && options.body !== null;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    signal: controller.signal,
-    headers: {
-      ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
-      PassengerInfo: JSON.stringify(getPassengerInfo()),
-      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-      Accept: 'application/json, text/plain, */*',
-      ...(options.headers ?? {}),
-    },
-  });
-  clearTimeout(timeout);
-  const text = await response.text();
-  let body: unknown = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      body = text;
+  rideLog.apiRequest(method, path);
+  try {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        ...(apiToken ? { Authorization: `Bearer ${apiToken}` } : {}),
+        PassengerInfo: JSON.stringify(getPassengerInfo()),
+        ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+        Accept: 'application/json, text/plain, */*',
+        ...(options.headers ?? {}),
+      },
+    });
+    const text = await response.text();
+    let body: unknown = null;
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = text;
+      }
     }
+    rideLog.apiResponse(method, path, response.status, Date.now() - startedAt, body);
+    if (!response.ok) {
+      if (response.status === 401) unauthorizedHandler?.();
+      const message =
+        body && typeof body === 'object' && 'message' in body
+          ? String((body as { message?: unknown }).message)
+          : text.trim().slice(0, 300) || `Erro HTTP ${response.status}`;
+      throw new ApiError(message, response.status, body, text);
+    }
+    return { status: response.status, body: body as T };
+  } catch (error) {
+    rideLog.apiError(
+      method,
+      path,
+      Date.now() - startedAt,
+      error,
+      error instanceof ApiError ? error.status : undefined,
+    );
+    throw error;
+  } finally {
+    clearTimeout(timeout);
   }
-  if (!response.ok) {
-    if (response.status === 401) unauthorizedHandler?.();
-    const message =
-      body && typeof body === 'object' && 'message' in body
-        ? String((body as { message?: unknown }).message)
-        : text.trim().slice(0, 300) || `Erro HTTP ${response.status}`;
-    throw new ApiError(message, response.status, body, text);
-  }
-  return { status: response.status, body: body as T };
 }
 
 async function request<T>(path: string, options: RequestInit = {}) {
