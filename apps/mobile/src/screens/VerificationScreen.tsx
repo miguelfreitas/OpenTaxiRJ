@@ -13,7 +13,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ApiError, sendNewSmsCode, sendNewWhatsAppCode, verifySmsCode } from '../api/client';
+import {
+  ApiError,
+  sendEmailCode,
+  sendNewSmsCode,
+  sendNewWhatsAppCode,
+  verifyEmailCode,
+  verifySmsCode,
+} from '../api/client';
 import type { RootStackParamList } from '../navigation/types';
 import { useAuth } from '../state/AuthContext';
 import { colors } from '../theme';
@@ -22,7 +29,7 @@ import { digitsOnly, maskPhone } from '../utils/phone';
 type Props = NativeStackScreenProps<RootStackParamList, 'Verification'>;
 
 export function VerificationScreen({ navigation, route }: Props) {
-  const { login, phoneNumber, cod, useWhatsApp = false } = route.params;
+  const { login, phoneNumber, cod, method = 'sms' } = route.params;
   const insets = useSafeAreaInsets();
   const { completeLogin } = useAuth();
   const [code, setCode] = useState('');
@@ -32,8 +39,8 @@ export function VerificationScreen({ navigation, route }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
 
   const submit = async () => {
-    const smsCode = digitsOnly(code);
-    if (smsCode.length !== 6) {
+    const nextCode = digitsOnly(code);
+    if (nextCode.length !== 6) {
       setError('Informe o código de 6 dígitos.');
       return;
     }
@@ -41,15 +48,22 @@ export function VerificationScreen({ navigation, route }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      if (cod === 201) {
-        const result = await verifySmsCode(login, phoneNumber, smsCode);
+      if (method === 'email') {
+        const result = await verifyEmailCode(login, phoneNumber, nextCode);
         if (result.status !== 200) {
           setError('Verifique se o código está correto.');
           return;
         }
-        navigation.navigate('Register', { login, phoneNumber, smsCode });
+        await completeLogin({ login, phoneNumber, emailCode: nextCode });
+      } else if (cod === 201) {
+        const result = await verifySmsCode(login, phoneNumber, nextCode);
+        if (result.status !== 200) {
+          setError('Verifique se o código está correto.');
+          return;
+        }
+        navigation.navigate('Register', { login, phoneNumber, smsCode: nextCode });
       } else {
-        await completeLogin({ login, phoneNumber, smsCode });
+        await completeLogin({ login, phoneNumber, smsCode: nextCode });
       }
     } catch (err) {
       setError(
@@ -68,7 +82,8 @@ export function VerificationScreen({ navigation, route }: Props) {
     setError(null);
     setNotice(null);
     try {
-      if (useWhatsApp) await sendNewWhatsAppCode(phoneNumber);
+      if (method === 'email') await sendEmailCode(login);
+      else if (method === 'whatsapp') await sendNewWhatsAppCode(phoneNumber);
       else await sendNewSmsCode(phoneNumber);
       setNotice('Código enviado novamente.');
     } catch {
@@ -100,12 +115,18 @@ export function VerificationScreen({ navigation, route }: Props) {
         </Pressable>
 
         <Text style={styles.title}>
-          {useWhatsApp ? 'Verificação via WhatsApp' : 'Verificação de SMS'}
+          {method === 'email'
+            ? 'Verificação por e-mail'
+            : method === 'whatsapp'
+              ? 'Verificação via WhatsApp'
+              : 'Verificação de SMS'}
         </Text>
         <Text style={styles.description}>
-          {useWhatsApp
-            ? 'Foi enviada uma mensagem via WhatsApp para o número informado. Digite o código abaixo.'
-            : 'Foi enviado um SMS para o número informado. Digite o código abaixo.'}
+          {method === 'email'
+            ? 'Foi enviado um código para o e-mail informado. Digite o código abaixo.'
+            : method === 'whatsapp'
+              ? 'Foi enviada uma mensagem via WhatsApp para o número informado. Digite o código abaixo.'
+              : 'Foi enviado um SMS para o número informado. Digite o código abaixo.'}
         </Text>
 
         <View style={styles.phoneRow}>
@@ -114,7 +135,13 @@ export function VerificationScreen({ navigation, route }: Props) {
         </View>
 
         <TextInput
-          accessibilityLabel={useWhatsApp ? 'Código WhatsApp' : 'Código SMS'}
+          accessibilityLabel={
+            method === 'email'
+              ? 'Código por e-mail'
+              : method === 'whatsapp'
+                ? 'Código WhatsApp'
+                : 'Código SMS'
+          }
           autoComplete="sms-otp"
           autoFocus
           keyboardType="number-pad"

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { ApiError, authPassenger } from '../api/client';
+import { ApiError, authPassenger, sendEmailCode } from '../api/client';
 import type { RootStackParamList } from '../navigation/types';
 import { colors } from '../theme';
 import { digitsOnly, formatPhoneInput } from '../utils/phone';
@@ -25,7 +25,7 @@ export function LoginScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [useWhatsApp, setUseWhatsApp] = useState(true);
+  const [method, setMethod] = useState<'whatsapp' | 'sms' | 'email'>('whatsapp');
   const [error, setError] = useState<string | null>(null);
 
   const login = email.trim();
@@ -42,11 +42,16 @@ export function LoginScreen({ navigation }: Props) {
     setSubmitting(true);
     setError(null);
     try {
-      const result = await authPassenger(login, phoneNumber, useWhatsApp);
+      if (method === 'email') {
+        await sendEmailCode(login);
+        navigation.navigate('Verification', { login, phoneNumber, cod: 200, method });
+        return;
+      }
+      const result = await authPassenger(login, phoneNumber, method === 'whatsapp');
       if (result.status === 201) {
-        navigation.navigate('Verification', { login, phoneNumber, cod: 201, useWhatsApp });
+        navigation.navigate('Verification', { login, phoneNumber, cod: 201, method });
       } else if (result.status === 200) {
-        navigation.navigate('Verification', { login, phoneNumber, cod: 200, useWhatsApp });
+        navigation.navigate('Verification', { login, phoneNumber, cod: 200, method });
       } else if (result.status === 202) {
         navigation.navigate('EmailRecovery', {
           login,
@@ -124,30 +129,44 @@ export function LoginScreen({ navigation }: Props) {
           <Text style={styles.label}>Receber código</Text>
           <Pressable
             accessibilityRole="radio"
-            accessibilityState={{ checked: useWhatsApp }}
-            onPress={() => setUseWhatsApp(true)}
+            accessibilityState={{ checked: method === 'email' }}
+            onPress={() => setMethod('email')}
             style={styles.methodRow}
           >
-            <View style={[styles.radio, useWhatsApp && styles.radioOn]}>
-              {useWhatsApp ? <View style={styles.radioDot} /> : null}
+            <View style={[styles.radio, method === 'email' && styles.radioOn]}>
+              {method === 'email' ? <View style={styles.radioDot} /> : null}
             </View>
             <View style={styles.methodText}>
-              <Text style={styles.methodTitle}>WhatsApp</Text>
-              <Text style={styles.methodSub}>Código pelo WhatsApp</Text>
+              <Text style={styles.methodTitle}>E-mail</Text>
+              <Text style={styles.methodSub}>Código por e-mail</Text>
             </View>
           </Pressable>
           <Pressable
             accessibilityRole="radio"
-            accessibilityState={{ checked: !useWhatsApp }}
-            onPress={() => setUseWhatsApp(false)}
+            accessibilityState={{ checked: method === 'sms' }}
+            onPress={() => setMethod('sms')}
             style={styles.methodRow}
           >
-            <View style={[styles.radio, !useWhatsApp && styles.radioOn]}>
-              {!useWhatsApp ? <View style={styles.radioDot} /> : null}
+            <View style={[styles.radio, method === 'sms' && styles.radioOn]}>
+              {method === 'sms' ? <View style={styles.radioDot} /> : null}
             </View>
             <View style={styles.methodText}>
               <Text style={styles.methodTitle}>SMS</Text>
               <Text style={styles.methodSub}>Código por mensagem de texto</Text>
+            </View>
+          </Pressable>
+          <Pressable
+            accessibilityRole="radio"
+            accessibilityState={{ checked: method === 'whatsapp' }}
+            onPress={() => setMethod('whatsapp')}
+            style={styles.methodRow}
+          >
+            <View style={[styles.radio, method === 'whatsapp' && styles.radioOn]}>
+              {method === 'whatsapp' ? <View style={styles.radioDot} /> : null}
+            </View>
+            <View style={styles.methodText}>
+              <Text style={styles.methodTitle}>WhatsApp</Text>
+              <Text style={styles.methodSub}>Código pelo WhatsApp</Text>
             </View>
           </Pressable>
 

@@ -31,10 +31,12 @@ export type AuthStatus = 'loading' | 'anonymous' | 'authenticated';
 type CompleteLoginInput = {
   login: string;
   phoneNumber: string;
-  smsCode: string;
+  smsCode?: string;
+  emailCode?: string;
 };
 
 type CompleteSignUpInput = CompleteLoginInput & {
+  smsCode: string;
   fullName: string;
   displayName: string;
 };

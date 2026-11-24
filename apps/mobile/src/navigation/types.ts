@@ -1,6 +1,6 @@
 export type RootStackParamList = {
   Login: undefined;
-  Verification: { login: string; phoneNumber: string; cod?: number; useWhatsApp?: boolean };
+  Verification: { login: string; phoneNumber: string; cod?: number; method?: "whatsapp" | "sms" | "email" };
   Register: { login: string; phoneNumber: string; smsCode: string };
   EmailRecovery: { login: string; phoneNumber: string; oldPhoneNumber?: string };
   Origin: undefined;

@@ -104,7 +104,8 @@ type AuthPassengerResponse = {
 type SignInInput = {
   login: string;
   phoneNumber: string;
-  smsCode: string;
+  smsCode?: string;
+  emailCode?: string;
   cityId?: string;
 };
 
@@ -241,7 +242,8 @@ export async function signIn(input: SignInInput) {
     body: JSON.stringify({
       login: input.login,
       phoneNumber: input.phoneNumber,
-      smsCode: input.smsCode,
+      smsCode: input.smsCode ?? '',
+      ...(input.emailCode ? { emailCode: input.emailCode } : {}),
       cityId: input.cityId ?? '',
       ...getSignInClientInfo(),
     }),
@@ -261,6 +263,24 @@ export async function sendNewWhatsAppCode(phoneNumber: string) {
   return request<Record<string, never>>('/auth/sendNewWhatsAppCode', {
     method: 'POST',
     body: JSON.stringify({ phoneNumber }),
+  });
+}
+
+export async function sendEmailCode(login: string) {
+  return request<Record<string, never>>('/auth/sendEmailCode', {
+    method: 'POST',
+    body: JSON.stringify({ login }),
+  });
+}
+
+export async function verifyEmailCode(
+  login: string,
+  phoneNumber: string,
+  emailCode: string,
+) {
+  return requestWithStatus<Record<string, never>>('/auth/verifyEmailCode', {
+    method: 'POST',
+    body: JSON.stringify({ login, phoneNumber, emailCode }),
   });
 }
 

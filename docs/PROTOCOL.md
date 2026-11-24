@@ -165,8 +165,9 @@ Observed status handling:
 Responses for 202 may include `{ "oldPhoneNumber": "..." }`.
 
 4.1.22 has a separate email-login path. It calls `/auth/sendEmailCode` with `{ login }`,
-then submits `/auth/signIn` with `emailCode` instead of `smsCode`. The clone keeps
-WhatsApp/SMS as its fallback and does not yet expose the separate email-login screen.
+then submits `/auth/signIn` with `emailCode` instead of `smsCode`. The clone exposes
+E-mail, SMS, and WhatsApp code delivery; the email path uses the same send/verify/sign-in
+sequence with `emailCode`.
 
 ### 5.3 Sign-in
 
@@ -729,8 +730,8 @@ Still divergent or unverified:
 - Original `102` requests a fresh driver-to-destination route; clone currently
   relies on `213` for the route update. Original visual A/B is complete; the route
   recalculation path remains a parity difference, not an observed visual failure.
-- Original 4.1.22 exposes a separate email-code login path; clone exposes WhatsApp with
-  SMS fallback.
+- Original 4.1.22 exposes a separate email-code login path; clone exposes E-mail, SMS,
+  and WhatsApp code delivery.
 - Original rating submission was not captured; only `notRating` was.
 - FCM registration and `/aboutme/savePushToken` are intentionally excluded.
 - On-street, corporate, card registration, and Google Maps native behavior are excluded.
