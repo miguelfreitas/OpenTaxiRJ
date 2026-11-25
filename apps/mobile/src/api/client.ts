@@ -106,6 +106,19 @@ export type PassengerProfile = {
   listEligiblePaymentMethodsNative?: EligiblePaymentMethod[];
 };
 
+export type RaceHistoryItem = PassengerCurrentRace & {
+  createdAt?: string;
+  startedAt?: string;
+  finishedAt?: string;
+  paymentMethod?: AssociatedPaymentMethod;
+  distance?: { value?: number | string; text?: string };
+  time?: { value?: number | string; text?: string };
+  refound?: boolean;
+  rectified?: boolean;
+  raceInAnalysis?: boolean;
+  ratingSelected?: number;
+};
+
 export type AuthResult<T> = {
   status: number;
   body: T;
@@ -387,6 +400,22 @@ export async function getPassengerProfile() {
     '/aboutme/aboutMePassenger',
   );
   return (data.payload ?? data) as PassengerProfile;
+}
+
+export async function getRaceHistory(page = 1, paymentInApp = false) {
+  const data = await request<RaceHistoryItem[] | { races?: RaceHistoryItem[] }>(
+    `/races/raceHistory?currentPage=${encodeURIComponent(String(page))}` +
+      `&paymentInApp=${paymentInApp ? 'true' : 'false'}`,
+  );
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.races)) return data.races;
+  throw new ApiError('Resposta inválida do histórico de corridas.', 500, data);
+}
+
+export async function getRaceHistoryById(raceId: string) {
+  return request<RaceHistoryItem>(
+    `/races/raceHistoryById?raceId=${encodeURIComponent(raceId)}`,
+  );
 }
 
 const SPECIAL_PHOTO_CITY = '5e2b16adfb8eba33461db886';

@@ -3,14 +3,17 @@ import { ActivityIndicator, AppState, LogBox, View } from 'react-native';
 import { DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AccountScreen } from './src/screens/AccountScreen';
+import { AccountMenuScreen } from './src/screens/AccountMenuScreen';
 import { ChatScreen } from './src/screens/ChatScreen';
 import { DestinationScreen } from './src/screens/DestinationScreen';
 import { EmailRecoveryScreen } from './src/screens/EmailRecoveryScreen';
+import { HistoryRaceDetailsScreen } from './src/screens/HistoryRaceDetailsScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
+import { MyAccountScreen } from './src/screens/MyAccountScreen';
 import { OriginScreen } from './src/screens/OriginScreen';
 import { RateRideScreen } from './src/screens/RateRideScreen';
 import { RegisterScreen } from './src/screens/RegisterScreen';
+import { RideHistoryScreen } from './src/screens/RideHistoryScreen';
 import { RideScreen } from './src/screens/RideScreen';
 import { RouteFareScreen } from './src/screens/RouteFareScreen';
 import { VerificationScreen } from './src/screens/VerificationScreen';
@@ -70,7 +73,10 @@ function RootNavigator() {
           <Stack.Screen component={RideScreen} name="Ride" />
           <Stack.Screen component={ChatScreen} name="Chat" />
           <Stack.Screen component={RateRideScreen} name="RateRide" />
-          <Stack.Screen component={AccountScreen} name="Account" />
+          <Stack.Screen component={AccountMenuScreen} name="Account" />
+          <Stack.Screen component={MyAccountScreen} name="MyAccount" />
+          <Stack.Screen component={RideHistoryScreen} name="RideHistory" />
+          <Stack.Screen component={HistoryRaceDetailsScreen} name="HistoryRaceDetails" />
         </>
       ) : (
         <>

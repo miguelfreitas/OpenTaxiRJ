@@ -23,6 +23,7 @@ ROUTE_CACHE = {}
 RTDB_URL = os.environ.get("FAKE_RTDB_URL", "http://127.0.0.1:9000").rstrip("/")
 RTDB_NS = os.environ.get("FAKE_RTDB_NS", "taxi-rio")
 CHAT_BRIDGE = os.environ.get("FAKE_CHAT_BRIDGE", "1") == "1"
+HISTORY_PAGE_SIZE = 10
 DISCOUNTS = (
     ("Tarifa Normal", "Bandeira 1", "59c424f09c4b6aa933bbed93", "20.00", 3),
     ("10%", "Bandeira 1", "59c424f09c4b6aa933bbed94", "18.00", 2),
@@ -112,6 +113,7 @@ ROUTES = {
     "/_control/scenario": {"POST"},
     "/_control/ws": {"POST"},
     "/_control/drop_ws": {"POST"},
+    "/_control/history": {"POST"},
     "/_control/race": {"POST"},
     "/_control/cancel_mode": {"POST"},
     "/_control/create_mode": {"POST"},
@@ -350,6 +352,7 @@ def current_race_payload(race):
     })
     return {
         "raceId": race.get("raceId"),
+        "createdAt": race.get("createdAt"),
         "statusId": race.get("statusId", 100),
         "typeOfCall": race.get("typeOfCall", "app"),
         "driver": race.get("driver"),
@@ -418,6 +421,43 @@ def synthetic_route(origin):
     }
 
 
+def fake_history_item(index):
+    origin = _coord({
+        "formattedAddress": f"Rua de Origem {index + 1}, Rio de Janeiro",
+        "position": {"lat": -22.91 - index * 0.001, "lng": -43.18 - index * 0.001},
+    })
+    destination = _coord({
+        "formattedAddress": f"Avenida de Destino {index + 1}, Rio de Janeiro",
+        "position": {"lat": -22.96 - index * 0.001, "lng": -43.19 - index * 0.001},
+    })
+    distance = 4200 + index * 250
+    duration = 900 + index * 30
+    return {
+        "raceId": f"fake-history-{index + 1}",
+        "createdAt": f"2026-11-{24 - index:02d} 10:{index % 60:02d}:00",
+        "startedAt": f"2026-11-{24 - index:02d} 10:{index % 60:02d}:10",
+        "finishedAt": f"2026-11-{24 - index:02d} 10:{index % 60:02d}:40",
+        "statusId": 114,
+        "typeOfCall": "app",
+        "driver": fake_driver(),
+        "geolocationData": {"origin": origin, "destination": destination},
+        "origin": origin,
+        "destination": destination,
+        "distance": {"value": distance, "text": f"{distance / 1000:.1f} km"},
+        "time": {"value": duration, "text": f"{duration // 60} min"},
+        "estimatedPrice": "20.00",
+        "total": "20.00",
+        "priceToPay": "20.00",
+        "discount": "0.00",
+        "tolls": [],
+        "invalid": False,
+        "suspect": False,
+        "raceDiscount": {"id": "59c424f09c4b6aa933bbed93", "fare": "Tarifa Normal", "flag": "Bandeira 1"},
+        "paymentMethod": {"pindex": 1, "paymentId": "money", "name": "Dinheiro"},
+        "associatedPaymentMethod": {"pindex": 1, "paymentId": "money", "name": "Dinheiro"},
+    }
+
+
 def race_payload(data=None):
     data = data if isinstance(data, dict) else {}
     geo = data.get("geoLocationData") if isinstance(data.get("geoLocationData"), dict) else {}
@@ -455,6 +495,7 @@ def race_payload(data=None):
     discount = data.get("raceDiscount") if isinstance(data.get("raceDiscount"), dict) else {"id": "59c424f09c4b6aa933bbed93", "fare": "Tarifa Normal"}
     return {
         "raceId": "fake-race-1",
+        "createdAt": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
         "statusId": 100,
         "typeOfCall": "onStreet" if data.get("typeOfCall") == "onStreet" else "app",
         "driver": None,
@@ -905,6 +946,12 @@ async def handle(request: web.Request):
         for client in clients:
             await client.close()
         return web.json_response({"dropped": len(clients)})
+    if path == "/_control/history":
+        count = body.get("count", 3) if isinstance(body, dict) else 3
+        if not isinstance(count, int) or not 1 <= count <= 50:
+            return web.json_response({"message": "count must be an integer from 1 to 50"}, status=400)
+        STATE["history"] = [fake_history_item(index) for index in range(count)]
+        return web.json_response(control_state())
     if path == "/_control/race":
         data = body if isinstance(body, dict) else {}
         if data.get("clear"):
@@ -1021,17 +1068,18 @@ async def handle(request: web.Request):
             "source": details["source"],
         }, status=200)
     if path == "/races/raceHistory":
-        return web.json_response({
-            "races": STATE["history"],
-            "total": len(STATE["history"]),
-            "currentPage": 1,
-        }, status=200)
+        try:
+            page = max(1, int(request.query.get("currentPage", "1")))
+        except ValueError:
+            return web.json_response({"message": "currentPage must be an integer"}, status=400)
+        start = (page - 1) * HISTORY_PAGE_SIZE
+        return web.json_response(STATE["history"][start:start + HISTORY_PAGE_SIZE], status=200)
     if path == "/races/raceHistoryById":
         race_id = request.query.get("raceId")
         for item in STATE["history"]:
             if item.get("raceId") == race_id:
                 return web.json_response(item, status=200)
-        return web.json_response(race_payload(), status=200)
+        return web.json_response({"message": "Corrida não encontrada"}, status=404)
     if path in ("/races/fares", "/races/onStreetFares"):
         return web.json_response([
             {

@@ -21,9 +21,9 @@ import { useRide } from '../state/RideContext';
 import { colors } from '../theme';
 import { digitsOnly, formatPhoneInput } from '../utils/phone';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Account'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'MyAccount'>;
 
-export function AccountScreen({ navigation }: Props) {
+export function MyAccountScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { user, refreshProfile, updateProfile, signOut } = useAuth();
   const { reset: resetBooking } = useBooking();

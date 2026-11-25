@@ -44,6 +44,7 @@ by a company in California. It makes no sense.
 - Passenger registration and email-based account recovery.
 - Origin and destination selection from the map or by address search.
 - Recent-address history when the origin or destination field is focused.
+- Previous ride history, with a paginated list and ride details.
 - Route preview with estimated distance and duration.
 - Fare and discount lookup, including selection of the desired option.
 - Ride requests with real-time status updates.

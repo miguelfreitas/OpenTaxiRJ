@@ -10,4 +10,7 @@ export type RootStackParamList = {
   Chat: { raceId: string };
   RateRide: { raceId: string };
   Account: undefined;
+  MyAccount: undefined;
+  RideHistory: undefined;
+  HistoryRaceDetails: { raceId: string };
 };

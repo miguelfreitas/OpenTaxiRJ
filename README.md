@@ -44,6 +44,7 @@ serviço de transporte prestado por um Brasileiro para outro Brasileiro seja int
 - Cadastro de passageiro e recuperação de acesso por e-mail.
 - Definição de origem e destino pelo mapa ou por busca de endereço.
 - Histórico de endereços recentes ao focar o campo de origem ou destino.
+- Histórico de corridas anteriores, com lista paginada e detalhes da corrida.
 - Prévia da rota com distância e duração estimadas.
 - Consulta de tarifas e descontos, com seleção da opção desejada.
 - Solicitação de corrida com acompanhamento do status em tempo real.

@@ -114,6 +114,28 @@ Optional diagnostic logging is enabled at build time:
 EXPO_PUBLIC_RIDE_LOG=1 pnpm android:release
 ```
 
+## Ride history fixtures
+
+The history endpoints follow the original client contract:
+
+```sh
+# Seed 12 finished rides, including enough rows to exercise pagination
+curl -s -X POST http://127.0.0.1:8081/_control/history \
+  -H 'Content-Type: application/json' \
+  -d '{"count":12}'
+
+# The response is a JSON array, not an object
+curl -s 'http://127.0.0.1:8081/races/raceHistory?currentPage=1&paymentInApp=false' \
+  -H 'Authorization: Bearer fake-token'
+
+# Fetch one history item
+curl -s 'http://127.0.0.1:8081/races/raceHistoryById?raceId=fake-history-1' \
+  -H 'Authorization: Bearer fake-token'
+```
+
+The fake server returns 10 items per page. Request consecutive pages until an empty array
+is returned. `POST /_control/reset` clears the seeded history.
+
 ## Ride scenarios
 
 Select the initial scenario with `RIDE_SCENARIO`, or change it at runtime through

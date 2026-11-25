@@ -345,7 +345,40 @@ class FakeContractTest(unittest.IsolatedAsyncioTestCase):
             )
         status, body = await self.get("/races/raceHistory")
         self.assertEqual(status, 200, body)
-        self.assertEqual(body["total"], 1, body)
+        self.assertEqual(len(body), 1, body)
+        self.assertEqual(body[0]["raceId"], "fake-race-1", body)
+
+    async def test_history_pagination_and_detail(self):
+        await self.reset()
+        status, body = await self.post("/_control/history", {"count": 12})
+        self.assertEqual(status, 200, body)
+
+        status, page1 = await self.get("/races/raceHistory?currentPage=1&paymentInApp=false")
+        self.assertEqual(status, 200, page1)
+        self.assertIsInstance(page1, list)
+        self.assertEqual(len(page1), 10, page1)
+        self.assertEqual(page1[0]["raceId"], "fake-history-1", page1)
+        self.assertEqual(page1[0]["geolocationData"]["origin"]["formattedAddress"], "Rua de Origem 1, Rio de Janeiro")
+
+        status, page2 = await self.get("/races/raceHistory?currentPage=2&paymentInApp=false")
+        self.assertEqual(status, 200, page2)
+        self.assertEqual(len(page2), 2, page2)
+
+        status, page3 = await self.get("/races/raceHistory?currentPage=3&paymentInApp=false")
+        self.assertEqual(status, 200, page3)
+        self.assertEqual(page3, [])
+
+        status, detail = await self.get("/races/raceHistoryById?raceId=fake-history-1")
+        self.assertEqual(status, 200, detail)
+        self.assertEqual(detail["raceId"], "fake-history-1", detail)
+        self.assertEqual(detail["statusId"], 114, detail)
+        self.assertTrue(detail["createdAt"], detail)
+
+        status, missing = await self.get("/races/raceHistoryById?raceId=missing")
+        self.assertEqual(status, 404, missing)
+
+        status, invalid_page = await self.get("/races/raceHistory?currentPage=abc")
+        self.assertEqual(status, 400, invalid_page)
 
     async def test_real_213_and_final_113_shapes(self):
         await self.reset("finished")
