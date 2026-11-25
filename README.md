@@ -270,3 +270,7 @@ API.
 
 A especificação detalhada do protocolo está em [`docs/PROTOCOL.md`](docs/PROTOCOL.md),
 em inglês.
+
+## Licença
+
+Este projeto está licenciado sob a licença MIT. Veja [`LICENSE`](LICENSE).

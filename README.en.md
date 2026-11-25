@@ -267,3 +267,7 @@ requests, including the Android identifier, operating system, and device model. 
 payment, and discount identifiers are part of the normal API payloads.
 
 The detailed protocol specification is in [`docs/PROTOCOL.md`](docs/PROTOCOL.md).
+
+## License
+
+This project is licensed under the MIT License. See [`LICENSE`](LICENSE).
