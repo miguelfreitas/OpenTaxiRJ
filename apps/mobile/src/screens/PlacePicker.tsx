@@ -72,6 +72,7 @@ export function PlacePicker({
   const [notice, setNotice] = useState<string | null>(null);
   const [geocodeError, setGeocodeError] = useState<string | null>(null);
   const [inputFocused, setInputFocused] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const inputFocusedRef = useRef(false);
   const suppressReverseRef = useRef(false);
@@ -173,6 +174,7 @@ export function PlacePicker({
   const onChangeQuery = (value: string) => {
     setQuery(value);
     setAddress(value);
+    setShowHistory(false);
     setNotice(null);
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     if (value.trim().length < 3) {
@@ -203,6 +205,7 @@ export function PlacePicker({
     setResults([]);
     setNotice(null);
     setGeocodeError(null);
+    setShowHistory(false);
     setInputFocused(false);
     inputFocusedRef.current = false;
     Keyboard.dismiss();
@@ -292,11 +295,13 @@ export function PlacePicker({
             autoCorrect={false}
             onBlur={() => {
               setInputFocused(false);
+              setShowHistory(false);
               inputFocusedRef.current = false;
             }}
             onChangeText={onChangeQuery}
             onFocus={() => {
               setInputFocused(true);
+              setShowHistory(true);
               inputFocusedRef.current = true;
               void loadAddressHistory().then(setHistory);
             }}
@@ -314,15 +319,16 @@ export function PlacePicker({
               </Text>
             </View>
           ) : null}
-          {inputFocused && query.trim().length < 3 && history.length > 0 ? (
+          {inputFocused && (showHistory || query.trim().length === 0) && history.length > 0 ? (
             <ScrollView
               keyboardShouldPersistTaps="handled"
               nestedScrollEnabled
               style={styles.results}
             >
-              <Text style={styles.resultsLabel}>ENDEREÇOS RECENTES</Text>
+              <Text style={styles.resultsLabel}>RECENTES</Text>
               {history.map((place) => (
                 <Pressable
+                  accessibilityLabel={`Usar endereço recente ${place.shortLabel}`}
                   accessibilityRole="button"
                   key={place.id}
                   onPress={() => selectPlace(place)}

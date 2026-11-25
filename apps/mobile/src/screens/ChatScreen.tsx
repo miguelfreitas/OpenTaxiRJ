@@ -21,6 +21,15 @@ import type { RootStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Chat'>;
 
+const QUICK_MESSAGES = [
+  { id: 7, text: 'Estou aguardando' },
+  { id: 8, text: 'Estou a caminho' },
+  { id: 9, text: 'Você passou do endereço. Retorne' },
+  { id: 10, text: 'Seu caminho parece errado' },
+  { id: 11, text: 'Aguardo do outro lado da rua' },
+  { id: 666, text: 'Ok, entendi' },
+];
+
 export function ChatScreen({ navigation, route }: Props) {
   const { raceId } = route.params;
   const { driver } = useRide();
@@ -43,20 +52,22 @@ export function ChatScreen({ navigation, route }: Props) {
     return () => clearTimeout(timer);
   }, [messages.length]);
 
-  const send = async () => {
-    const value = text.trim();
-    if (!value || sending) return;
+  const sendMessage = async (value: string, clearComposer = true) => {
+    const trimmed = value.trim();
+    if (!trimmed || sending) return;
     setSending(true);
     setError(null);
     try {
-      await sendChatMessage(raceId, driver, value);
-      setText('');
+      await sendChatMessage(raceId, driver, trimmed);
+      if (clearComposer) setText('');
     } catch {
       setError('Não foi possível enviar a mensagem.');
     } finally {
       setSending(false);
     }
   };
+
+  const send = () => void sendMessage(text);
 
   return (
     <KeyboardAvoidingView
@@ -110,6 +121,28 @@ export function ChatScreen({ navigation, route }: Props) {
       </ScrollView>
 
       <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, 14) }]}>
+        <ScrollView
+          contentContainerStyle={styles.quickMessages}
+          horizontal
+          keyboardShouldPersistTaps="handled"
+          showsHorizontalScrollIndicator={false}
+        >
+          {QUICK_MESSAGES.map((message) => (
+            <Pressable
+              accessibilityLabel={`Enviar mensagem rápida: ${message.text}`}
+              accessibilityRole="button"
+              disabled={sending}
+              key={message.id}
+              onPress={() => void sendMessage(message.text, false)}
+              style={({ pressed }) => [
+                styles.quickButton,
+                (sending || pressed) && styles.disabled,
+              ]}
+            >
+              <Text style={styles.quickText}>{message.text}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.inputRow}>
           <TextInput
@@ -168,6 +201,16 @@ const styles = StyleSheet.create({
   messageText: { color: colors.text, fontSize: 14, lineHeight: 19 },
   myMessageText: { color: colors.surface },
   composer: { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1, paddingHorizontal: 12, paddingTop: 10 },
+  quickMessages: { gap: 8, paddingBottom: 10, paddingTop: 2 },
+  quickButton: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  quickText: { color: colors.text, fontSize: 12, fontWeight: '600' },
   inputRow: { alignItems: 'flex-end', flexDirection: 'row', gap: 8 },
   input: { backgroundColor: colors.background, borderColor: colors.border, borderRadius: 16, borderWidth: 1, color: colors.text, flex: 1, maxHeight: 110, minHeight: 46, paddingHorizontal: 14, paddingVertical: 10 },
   sendButton: { alignItems: 'center', backgroundColor: colors.pin, borderRadius: 14, justifyContent: 'center', minHeight: 46, paddingHorizontal: 16 },
