@@ -375,10 +375,14 @@ Payment semantics:
 
 - `pindex 10` is PIX as **payment to the driver**, under the label
   `Pagamento no táxi`.
-- The client sends only the method/payment identifier. There is no PIX key, QR code,
-  copy-and-paste payload, in-app charge, or payment confirmation endpoint.
+- The API has no PIX key, QR code, copy-and-paste payload, in-app charge, or payment
+  confirmation endpoint.
 - Cash and PIX settle directly between passenger and driver.
-- The clone is money-only by decision and sends `pindex 1`; it has no payment selector.
+- The clone still sends `pindex 1` (cash) and has no payment selector. Independently of
+  the selected method, the finished-ride screen can build a static PIX copy-and-paste
+  payload entirely on the client from `driver.phoneNumber` (normalized to E.164
+  `+55...`) and `priceToPay`. The phone-as-PIX-key assumption is a UI warning, not a
+  server guarantee.
 - Fare requests require the eligible method’s `paymentMethodId`; create requests send
   the same selected method.
 
@@ -678,6 +682,8 @@ Privacy boundary:
 
 - The original consumes the driver phone for the call action. It does **not** consume a
   driver PIX key, CPF, email, or an address beyond `addressAcceptedRace`.
+- The clone also derives an optional static PIX payload from `phoneNumber`; the payload
+  is built locally and does not consume a new server field.
 - Unknown JSON properties are not validated or stripped by the client, so a modified
   client could inspect extra server fields. No additional PII has been observed in
   captured driver payloads.

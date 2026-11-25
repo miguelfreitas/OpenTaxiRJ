@@ -52,10 +52,16 @@ by a company in California. It makes no sense.
 - Driver phone contact and ride cancellation.
 - Real-time driver chat, including quick messages.
 - Final fare summary and ride rating with stars and a comment.
+- Static PIX copy-and-paste code with the final amount, when the driver's phone number
+  is available.
 - Account data management.
 - Compatibility with the local fake server and the production API.
 
-Payment is implemented in cash mode. Other payment methods are not part of this version.
+Payment is still settled directly with the driver (cash or PIX). At the end of the ride,
+the app can generate a static PIX copy-and-paste code with the final amount when the
+driver's phone number is available, assuming that number is the driver's PIX key. The
+app does not process payments or confirm transfers; confirm the receiver's name in the
+bank app before paying.
 
 ## Development requirements
 

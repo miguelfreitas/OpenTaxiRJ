@@ -52,11 +52,16 @@ serviço de transporte prestado por um Brasileiro para outro Brasileiro seja int
 - Contato telefônico com o taxista e cancelamento da corrida.
 - Chat em tempo real com o taxista, incluindo mensagens rápidas.
 - Resumo da tarifa final e avaliação da corrida com estrelas e comentário.
+- Geração de código PIX Estático (copia e cola) com o valor final, quando o telefone do
+  motorista está disponível.
 - Gerenciamento dos dados da conta.
 - Compatibilidade com o servidor fake local e com a API de produção.
 
-O pagamento está implementado no modo dinheiro. Outras formas de pagamento não
-fazem parte desta versão.
+O pagamento continua sendo acertado diretamente com o taxista (dinheiro ou PIX). Ao
+final da corrida, o app pode gerar um código PIX Estático (copia e cola) com o valor
+final quando o telefone do motorista está disponível, assumindo que esse número seja a
+chave PIX dele. O app não processa pagamentos nem confirma transferências; confira o
+nome do recebedor no app do banco antes de pagar.
 
 ## Requisitos para desenvolvimento
 
