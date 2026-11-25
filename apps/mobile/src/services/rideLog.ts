@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import { RIDE_LOG_ENABLED } from '../config';
 
 type RideLogNative = {
   append: (line: string) => void;
@@ -50,6 +51,7 @@ function clean(value: unknown, depth = 0, seen = new WeakSet<object>()): unknown
 }
 
 function write(event: string, data?: unknown) {
+  if (!RIDE_LOG_ENABLED) return;
   const entry = {
     t: new Date().toISOString(),
     ms: Date.now(),
@@ -114,6 +116,7 @@ export const rideLog = {
 };
 
 export async function initRideLog(meta: Record<string, unknown>) {
+  if (!RIDE_LOG_ENABLED) return null;
   let path: string | null = null;
   if (nativeLog) {
     try {
@@ -127,10 +130,11 @@ export async function initRideLog(meta: Record<string, unknown>) {
 }
 
 export async function getRideLogPath() {
-  if (!nativeLog) return null;
+  if (!RIDE_LOG_ENABLED || !nativeLog) return null;
   return nativeLog.getLogPath();
 }
 
 export async function clearRideLog() {
-  if (nativeLog) await nativeLog.clear();
+  if (!RIDE_LOG_ENABLED || !nativeLog) return;
+  await nativeLog.clear();
 }

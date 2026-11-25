@@ -29,3 +29,4 @@ const localRtdb =
   RTDB_URL.startsWith('http://10.0.2.2') || RTDB_URL.startsWith('http://127.0.0.1');
 export const USE_FIREBASE_EMULATOR =
   (process.env.EXPO_PUBLIC_FIREBASE_EMULATOR ?? (localRtdb ? '1' : '0')) === '1';
+export const RIDE_LOG_ENABLED = process.env.EXPO_PUBLIC_RIDE_LOG === '1';

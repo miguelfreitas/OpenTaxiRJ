@@ -1,49 +1,133 @@
 # Open Taxi RJ
 
-Open source passenger app for Taxi.Rio, built with Expo and React Native.
+[English version](README.en.md)
 
-## Requirements
+O **Open Taxi RJ** é uma reimplementação independente e de código aberto do cliente
+**Passageiros** do aplicativo **Taxi.Rio**, da Prefeitura do Rio de Janeiro. O projeto
+usa Expo, React Native e Android.
 
-- Node.js 20 or newer
-- pnpm 9 or newer
-- JDK 17 or newer, with `JAVA_HOME` set
-- Android SDK, with `ANDROID_HOME` set
-- An Android emulator or a device with USB debugging enabled
+> Este é um projeto independente. Não é afiliado, mantido ou endossado pela Prefeitura
+> do Rio de Janeiro, pelo Taxi.Rio ou pelos responsáveis pelo aplicativo oficial.
 
-## Install
+## Capturas de tela
+
+<p align="center">
+  <img src="screenshots/origem.png" width="30%" alt="Seleção de origem" />
+  <img src="screenshots/destino.png" width="30%" alt="Seleção de destino" />
+  <img src="screenshots/tarifa.png" width="30%" alt="Escolha da tarifa" />
+</p>
+
+<p align="center">
+  Origem, destino e escolha da tarifa.
+</p>
+
+## Por quê criar um novo app?
+
+Me irritava o fato do app Taxi.Rio não permitir mover o alfinete do mapa para o local
+exato de partida, um recurso básico de usabilidade disponível há anos em outros apps
+como Uber. No app original da prefeitura é necessário ficar tentando endereços até
+encontrar o local certo.
+
+Além disso, a comunidade de usuários poderá usar o aplicativo aberto para criar novas
+funcionalidades que facilitem a vida do usuário e do taxista. Por exemplo, se a
+prefeitura acrescentasse um campo de chave PIX ao cadastro do motorista seria possível
+gerar um código PIX copia-cola ao término da corrida para agilizar o pagamento sem
+digitação de valor, código PIX nem nada.
+
+Repito o que sempre falo para os motoristas: não há nenhuma justificativa para que um
+serviço de transporte prestado por um Brasileiro para outro Brasileiro seja intermediado
+(e tenha que pagar taxa!) para uma empresa da Califórnia. Nenhum sentido.
+
+## Funcionalidades
+
+- Login por código enviado por **e-mail**, **SMS** ou **WhatsApp**.
+- Cadastro de passageiro e recuperação de acesso por e-mail.
+- Definição de origem e destino pelo mapa ou por busca de endereço.
+- Histórico de endereços recentes ao focar o campo de origem ou destino.
+- Prévia da rota com distância e duração estimadas.
+- Consulta de tarifas e descontos, com seleção da opção desejada.
+- Solicitação de corrida com acompanhamento do status em tempo real.
+- Mapa da corrida, rota, ETA, distância e dados do taxista.
+- Contato telefônico com o taxista e cancelamento da corrida.
+- Chat em tempo real com o taxista, incluindo mensagens rápidas.
+- Resumo da tarifa final e avaliação da corrida com estrelas e comentário.
+- Gerenciamento dos dados da conta.
+- Compatibilidade com o servidor fake local e com a API de produção.
+
+O pagamento está implementado no modo dinheiro. Outras formas de pagamento não
+fazem parte desta versão.
+
+## Requisitos para desenvolvimento
+
+- Node.js 20 ou superior
+- pnpm 9 ou superior
+- JDK 17 ou superior, com `JAVA_HOME` configurado
+- Android SDK configurado em `ANDROID_HOME`
+- Android platform tools, incluindo `adb`
+- Emulador Android ou aparelho com depuração USB habilitada
+
+Este repositório contém apenas o projeto Expo. A pasta nativa `android/` é gerada e
+ignorada pelo Git.
+
+## Instalação das dependências
 
 ```sh
 cd apps/mobile
 pnpm install --frozen-lockfile
 ```
 
-## Generate the Android project
-
-The native Android project is generated from `app.json` and is not committed.
+## Gerar o projeto Android
 
 ```sh
+cd apps/mobile
 pnpm android:prebuild
 ```
 
-## Build and run
+O comando recria `apps/mobile/android` a partir do `app.json` e dos plugins locais,
+incluindo o módulo nativo de logs.
 
-Start the Metro server and install a debug build on the connected device or emulator:
+## Desenvolvimento
+
+Inicie o Metro:
 
 ```sh
+cd apps/mobile
+pnpm start
+```
+
+Compile e instale a versão de desenvolvimento no emulador ou aparelho conectado:
+
+```sh
+cd apps/mobile
 pnpm android
 ```
 
-## Build a release APK
-
-The default build uses the local fake API and local Firebase emulator.
+Verifique os tipos:
 
 ```sh
-pnpm android:release
+cd apps/mobile
+pnpm typecheck
 ```
 
-To build against the production API:
+## Build do APK
+
+Os valores `EXPO_PUBLIC_*` são incorporados ao bundle JavaScript durante o build. Ao
+trocar entre o ambiente local e a produção, remova o bundle anterior antes de compilar:
 
 ```sh
+cd apps/mobile
+rm -rf android/app/build/generated/assets/react/release \
+  android/app/build/intermediates/sourcemaps/react/release
+```
+
+### Build de produção
+
+```sh
+cd apps/mobile
+
+rm -rf android/app/build/generated/assets/react/release \
+  android/app/build/intermediates/sourcemaps/react/release
+
 EXPO_PUBLIC_API_BASE_URL=https://api-passenger.app.taxi.rio \
 EXPO_PUBLIC_WS_URL=wss://wss-passenger.app.taxi.rio \
 EXPO_PUBLIC_RTDB_URL=https://taxi-rio.firebaseio.com \
@@ -51,45 +135,140 @@ EXPO_PUBLIC_FIREBASE_EMULATOR=0 \
 pnpm android:release
 ```
 
-The APK is written to:
+O APK de produção pode ser copiado com:
+
+```sh
+cp android/app/build/outputs/apk/release/app-release.apk \
+  dist/open-taxi-rj-real.apk
+```
+
+> O build de release atual usa a chave de depuração gerada pelo projeto. Ele serve para
+> testes e instalação local, mas não deve ser distribuído como build oficial. Para uma
+> distribuição real, configure uma keystore de release e a assinatura em
+> `apps/mobile/android/app/build.gradle`.
+
+### Build de desenvolvimento
+
+O build local usa por padrão:
+
+- API REST/WebSocket em `10.0.2.2:8081` no emulador Android
+- Firebase RTDB em `10.0.2.2:9000`, namespace `taxi-rio`
+
+O servidor fake local ainda não está incluído neste repositório. Quando ele for
+publicado, as instruções para subir o ambiente local serão adicionadas aqui.
+
+Em um aparelho físico, substitua `10.0.2.2` pelo endereço IP da máquina que executa o
+servidor fake e garanta que a porta `8081` esteja acessível na rede local.
+
+```sh
+cd apps/mobile
+
+rm -rf android/app/build/generated/assets/react/release \
+  android/app/build/intermediates/sourcemaps/react/release
+
+pnpm android:release
+```
+
+O APK será gerado em:
 
 ```text
 apps/mobile/android/app/build/outputs/apk/release/app-release.apk
 ```
 
-When switching between local and production API values, force a fresh JS bundle:
+Também é possível copiá-lo para um caminho mais simples:
 
 ```sh
+cp android/app/build/outputs/apk/release/app-release.apk \
+  dist/open-taxi-rj-local.apk
+```
+
+## Logs de diagnóstico
+
+A geração de logs é **desativada por padrão** e pode ser ligada no momento do build:
+
+```sh
+cd apps/mobile
+
 rm -rf android/app/build/generated/assets/react/release \
   android/app/build/intermediates/sourcemaps/react/release
+
+EXPO_PUBLIC_RIDE_LOG=1 pnpm android:release
 ```
 
-The default release configuration uses the generated debug signing key. Replace it with a
-private release keystore before distributing the APK.
-
-## Type check
+Para um build de produção com logs:
 
 ```sh
-pnpm typecheck
+cd apps/mobile
+
+rm -rf android/app/build/generated/assets/react/release \
+  android/app/build/intermediates/sourcemaps/react/release
+
+EXPO_PUBLIC_API_BASE_URL=https://api-passenger.app.taxi.rio \
+EXPO_PUBLIC_WS_URL=wss://wss-passenger.app.taxi.rio \
+EXPO_PUBLIC_RTDB_URL=https://taxi-rio.firebaseio.com \
+EXPO_PUBLIC_FIREBASE_EMULATOR=0 \
+EXPO_PUBLIC_RIDE_LOG=1 \
+pnpm android:release
 ```
 
-## Protocol specification
+A variável é lida em tempo de build. Alterá-la exige reconstruir o APK e limpar o bundle
+anterior. Para desligar novamente, omita a variável ou use `EXPO_PUBLIC_RIDE_LOG=0`.
+Com a opção desligada, o app não cria o arquivo de log.
 
-The complete protocol contract is in [`docs/PROTOCOL.md`](docs/PROTOCOL.md). It covers
-authentication, profile, route/fare/create, WebSocket ride states, driver payloads,
-payments/PIX, chat, rating, and the fake-stack verification matrix.
+Quando habilitado, o app grava linhas JSON em:
 
-## Protocol identity
+```text
+/storage/emulated/0/Android/data/org.opentaxirj.client/files/logs/ride-session.log
+```
 
-The app reports its real version (`4.1.20`) and sends the same client metadata on each
-REST request: Android ID as `deviceId`, OS name/version, and device model/manufacturer.
-The shared protocol IDs for city, payment, and fare discounts are carried in the normal
-request payloads.
+O arquivo rotaciona ao atingir 32 MB. Para copiar o log de um emulador ou aparelho:
 
-## Runtime configuration
+```sh
+adb pull /sdcard/Android/data/org.opentaxirj.client/files/logs/ride-session.log
+```
 
-The build reads `EXPO_PUBLIC_API_BASE_URL`, `EXPO_PUBLIC_WS_URL`,
-`EXPO_PUBLIC_RTDB_URL`, `EXPO_PUBLIC_FIREBASE_EMULATOR`, and
-`EXPO_PUBLIC_DRIVER_PHOTO_BASE_URL` from `src/config.ts`.
-Without them it uses the local fake API and local RTDB emulator. Sign-in stores the
-bearer token under `authToken` with AsyncStorage.
+Os logs podem conter dados de diagnóstico, endereços e conteúdo de mensagens. Trate-os
+como informação sensível e não os compartilhe publicamente sem revisão.
+
+## Instalação do APK
+
+Com o aparelho ou emulador conectado:
+
+```sh
+adb devices
+adb install -r apps/mobile/android/app/build/outputs/apk/release/app-release.apk
+```
+
+Para instalar manualmente, copie o APK para o aparelho, permita a instalação de
+aplicativos desconhecidos para o gerenciador de arquivos e abra o arquivo.
+
+Se a instalação falhar por conflito de assinatura com uma versão anterior, remova a
+versão instalada antes:
+
+```sh
+adb uninstall org.opentaxirj.client
+```
+
+> A remoção apaga os dados locais do aplicativo. Use com cuidado se houver uma sessão ou
+> corrida em andamento.
+
+## Configuração de ambiente
+
+| Variável | Padrão no build local | Descrição |
+| --- | --- | --- |
+| `EXPO_PUBLIC_API_BASE_URL` | `http://10.0.2.2:8081` no Android | URL base da API REST |
+| `EXPO_PUBLIC_WS_URL` | Derivada da API | URL do WebSocket |
+| `EXPO_PUBLIC_RTDB_URL` | `http://10.0.2.2:9000?ns=taxi-rio` | URL do Firebase RTDB |
+| `EXPO_PUBLIC_FIREBASE_EMULATOR` | `1` quando a RTDB é local | Usa o Firebase Emulator |
+| `EXPO_PUBLIC_DRIVER_PHOTO_BASE_URL` | Derivada da API | Base das fotos dos taxistas |
+| `EXPO_PUBLIC_RIDE_LOG` | `0` | Ativa os logs de diagnóstico com `1` |
+
+## Identidade do cliente
+
+O aplicativo se identifica como versão `4.1.20` e envia metadados do cliente nas
+requisições REST, como identificador Android, sistema operacional e modelo do aparelho.
+Os identificadores de cidade, pagamento e descontos fazem parte dos payloads normais da
+API.
+
+A especificação detalhada do protocolo está em [`docs/PROTOCOL.md`](docs/PROTOCOL.md),
+em inglês.

@@ -19,7 +19,7 @@ import { BookingProvider } from './src/state/BookingContext';
 import { RideProvider } from './src/state/RideContext';
 import { colors } from './src/theme';
 import type { RootStackParamList } from './src/navigation/types';
-import { API_BASE_URL, WS_URL } from './src/config';
+import { API_BASE_URL, RIDE_LOG_ENABLED, WS_URL } from './src/config';
 import { getClientVersion } from './src/services/clientInfo';
 import { initRideLog, rideLog } from './src/services/rideLog';
 
@@ -86,6 +86,7 @@ function RootNavigator() {
 
 export default function App() {
   useEffect(() => {
+    if (!RIDE_LOG_ENABLED) return;
     const errorUtils = (globalThis as { ErrorUtils?: {
       getGlobalHandler?: () => (error: Error, isFatal: boolean) => void;
       setGlobalHandler?: (handler: (error: Error, isFatal: boolean) => void) => void;
