@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.venv/
+logs/
+firebase-emulator/.firebase/
+firebase-emulator/node_modules/
+firebase-emulator/*.log

@@ -154,11 +154,9 @@ O build local usa por padrão:
 - API REST/WebSocket em `10.0.2.2:8081` no emulador Android
 - Firebase RTDB em `10.0.2.2:9000`, namespace `taxi-rio`
 
-O servidor fake local ainda não está incluído neste repositório. Quando ele for
-publicado, as instruções para subir o ambiente local serão adicionadas aqui.
-
-Em um aparelho físico, substitua `10.0.2.2` pelo endereço IP da máquina que executa o
-servidor fake e garanta que a porta `8081` esteja acessível na rede local.
+O servidor fake local está em [`fake-server/`](fake-server/README.md), com instruções
+para instalar dependências, subir a API e o RTDB, escolher cenários de corrida e rodar
+os testes de contrato.
 
 ```sh
 cd apps/mobile
