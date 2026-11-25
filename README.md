@@ -13,12 +13,12 @@ usa Expo, React Native e Android.
 
 <p align="center">
   <img src="screenshots/origem.png" width="30%" alt="Seleção de origem" />
-  <img src="screenshots/destino.png" width="30%" alt="Seleção de destino" />
   <img src="screenshots/tarifa.png" width="30%" alt="Escolha da tarifa" />
+  <img src="screenshots/pagamento-pix.png" width="30%" alt="PIX copia-cola" />
 </p>
 
 <p align="center">
-  Origem, destino e escolha da tarifa.
+  Origem, escolha da tarifa e PIX copia-cola.
 </p>
 
 ## Por que criar um novo app?
