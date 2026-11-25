@@ -21,7 +21,7 @@ usa Expo, React Native e Android.
   Origem, destino e escolha da tarifa.
 </p>
 
-## Por quê criar um novo app?
+## Por que criar um novo app?
 
 Me irritava o fato do app Taxi.Rio não permitir mover o alfinete do mapa para o local
 exato de partida, um recurso básico de usabilidade disponível há anos em outros apps
